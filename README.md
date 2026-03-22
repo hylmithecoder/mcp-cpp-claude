@@ -28,8 +28,8 @@ This server exposes **8 core system tools** currently available to connected AI 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/hylmithecoder/mcp-cpp.git
-   cd mcp-cpp
+   git clone https://github.com/hylmithecoder/mcp-cpp-claude.git
+   cd mcp-cpp-claude
    ```
 
 2. **Build with CMake:**
