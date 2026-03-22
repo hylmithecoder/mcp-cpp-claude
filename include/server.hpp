@@ -35,12 +35,13 @@ namespace MCP {
         std::string statusText = "OK";
         std::map<std::string, std::string> headers;
         std::string body;
+        bool keepAlive = false;
 
         std::string build() const;
     };
 
     // Route handler type
-    using RouteHandler = std::function<HttpResponse(const HttpRequest&)>;
+    using RouteHandler = std::function<HttpResponse(const HttpRequest&, int)>;
 
     class Server {
     public:

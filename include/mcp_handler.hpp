@@ -21,21 +21,20 @@ namespace MCP {
         SystemTools tools_;
 
         // Session management
-        std::string sessionId_;
-        bool initialized_ = false;
+        std::map<std::string, int> activeSessions_;
         std::mutex sessionMutex_;
 
         // Generate a session ID
         std::string generateSessionId();
 
         // Handle POST /mcp (JSON-RPC messages)
-        HttpResponse handlePost(const HttpRequest& req);
+        HttpResponse handlePost(const HttpRequest& req, int client_fd);
 
-        // Handle GET /mcp (SSE stream — returns 405 for now, simple mode)
-        HttpResponse handleGet(const HttpRequest& req);
+        // Handle GET /mcp (SSE stream)
+        HttpResponse handleGet(const HttpRequest& req, int client_fd);
 
         // Handle DELETE /mcp (session termination)
-        HttpResponse handleDelete(const HttpRequest& req);
+        HttpResponse handleDelete(const HttpRequest& req, int client_fd);
 
         // JSON-RPC dispatch
         json processJsonRpc(const json& request);

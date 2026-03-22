@@ -9,7 +9,7 @@ namespace MCP {
         for (auto& [key, val] : headers) {
             oss << key << ": " << val << "\r\n";
         }
-        if (!body.empty() && headers.find("Content-Length") == headers.end()) {
+        if (!keepAlive && !body.empty() && headers.find("Content-Length") == headers.end()) {
             oss << "Content-Length: " << body.size() << "\r\n";
         }
         oss << "\r\n";
@@ -184,13 +184,19 @@ namespace MCP {
             return;
         }
 
-        // Find route handler
+        // Find route handler (strip query string for matching)
+        std::string routePath = req.path;
+        size_t qmark = routePath.find('?');
+        if (qmark != std::string::npos) {
+            routePath = routePath.substr(0, qmark);
+        }
+
         HttpResponse res;
         auto methodIt = routes_.find(req.method);
         if (methodIt != routes_.end()) {
-            auto pathIt = methodIt->second.find(req.path);
+            auto pathIt = methodIt->second.find(routePath);
             if (pathIt != methodIt->second.end()) {
-                res = pathIt->second(req);
+                res = pathIt->second(req, client_fd);
             } else {
                 res.statusCode = 404;
                 res.statusText = "Not Found";
@@ -207,7 +213,10 @@ namespace MCP {
         addCorsHeaders(res);
         std::string response = res.build();
         send(client_fd, response.c_str(), response.size(), 0);
-        close(client_fd);
+        
+        if (!res.keepAlive) {
+            close(client_fd);
+        }
     }
 
     HttpResponse Server::handleCors(const HttpRequest& req) {

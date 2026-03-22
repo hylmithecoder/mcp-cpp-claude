@@ -32,20 +32,21 @@ namespace MCP {
     }
 
     void McpHandler::registerRoutes(Server& server) {
-        server.route("POST", "/mcp", [this](const HttpRequest& req) {
-            return handlePost(req);
-        });
+        auto postHandler = [this](const HttpRequest& req, int client_fd) { return handlePost(req, client_fd); };
+        auto getHandler = [this](const HttpRequest& req, int client_fd) { return handleGet(req, client_fd); };
+        auto deleteHandler = [this](const HttpRequest& req, int client_fd) { return handleDelete(req, client_fd); };
 
-        server.route("GET", "/mcp", [this](const HttpRequest& req) {
-            return handleGet(req);
-        });
+        server.route("POST", "/mcp", postHandler);
+        server.route("GET", "/mcp", getHandler);
+        server.route("DELETE", "/mcp", deleteHandler);
 
-        server.route("DELETE", "/mcp", [this](const HttpRequest& req) {
-            return handleDelete(req);
-        });
+        // Also route root path to catch users not appending /mcp
+        server.route("POST", "/", postHandler);
+        server.route("GET", "/", getHandler);
+        server.route("DELETE", "/", deleteHandler);
     }
 
-    HttpResponse McpHandler::handlePost(const HttpRequest& req) {
+    HttpResponse McpHandler::handlePost(const HttpRequest& req, int client_fd) {
         HttpResponse res;
 
         // Check Accept header
@@ -93,8 +94,6 @@ namespace MCP {
             std::cerr << "[MCP] Notification: " << method << std::endl;
 
             if (method == "notifications/initialized") {
-                std::lock_guard<std::mutex> lock(sessionMutex_);
-                initialized_ = true;
                 std::cerr << "[MCP] Client initialized, session is active." << std::endl;
             }
 
@@ -108,38 +107,44 @@ namespace MCP {
             std::string method = request.value("method", "");
             std::cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ")" << std::endl;
 
-            // Check session for non-initialize requests
-            if (method != "initialize") {
+            // Extract sessionId from query string or headers
+            std::string sessionId = "";
+            size_t queryPos = req.path.find("sessionId=");
+            if (queryPos != std::string::npos) {
+                size_t endPos = req.path.find('&', queryPos);
+                if (endPos == std::string::npos) endPos = req.path.size();
+                sessionId = req.path.substr(queryPos + 10, endPos - (queryPos + 10));
+            } else {
                 auto sessionIt = req.headers.find("Mcp-Session-Id");
-                if (sessionIt == req.headers.end()) {
-                    sessionIt = req.headers.find("mcp-session-id");
-                }
+                if (sessionIt == req.headers.end()) sessionIt = req.headers.find("mcp-session-id");
+                if (sessionIt != req.headers.end()) sessionId = sessionIt->second;
+            }
 
+            int sse_fd = -1;
+            {
                 std::lock_guard<std::mutex> lock(sessionMutex_);
-                if (!sessionId_.empty()) {
-                    if (sessionIt == req.headers.end() || sessionIt->second != sessionId_) {
-                        res.statusCode = 400;
-                        res.statusText = "Bad Request";
-                        res.headers["Content-Type"] = "application/json";
-                        res.body = makeError(request["id"], -32600, "Invalid or missing Mcp-Session-Id").dump();
-                        return res;
-                    }
+                if (activeSessions_.count(sessionId)) {
+                    sse_fd = activeSessions_[sessionId];
                 }
+            }
+
+            if (sse_fd == -1) {
+                res.statusCode = 400;
+                res.statusText = "Bad Request";
+                res.headers["Content-Type"] = "application/json";
+                res.body = makeError(request["id"], -32600, "Invalid or missing Mcp-Session-Id for SSE").dump();
+                return res;
             }
 
             json result = processJsonRpc(request);
 
-            res.statusCode = 200;
-            res.statusText = "OK";
-            res.headers["Content-Type"] = "application/json";
-            res.body = result.dump();
+            // Send SSE Message
+            std::string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
+            send(sse_fd, sseMessage.c_str(), sseMessage.size(), 0);
 
-            // Add session ID header for initialize responses
-            if (method == "initialize") {
-                std::lock_guard<std::mutex> lock(sessionMutex_);
-                res.headers["Mcp-Session-Id"] = sessionId_;
-            }
-
+            // Respond 202 Accepted to the POST request
+            res.statusCode = 202;
+            res.statusText = "Accepted";
             return res;
         }
 
@@ -149,30 +154,46 @@ namespace MCP {
         return res;
     }
 
-    HttpResponse McpHandler::handleGet(const HttpRequest& req) {
-        // For now, we don't support server-initiated SSE streams
-        // Claude.ai primarily uses POST for communication
+    HttpResponse McpHandler::handleGet(const HttpRequest& req, int client_fd) {
+        std::string newSessionId = generateSessionId();
+        
+        {
+            std::lock_guard<std::mutex> lock(sessionMutex_);
+            activeSessions_[newSessionId] = client_fd;
+        }
+
+        std::cerr << "[MCP] New SSE stream opened, session ID: " << newSessionId << std::endl;
+
         HttpResponse res;
-        res.statusCode = 405;
-        res.statusText = "Method Not Allowed";
-        res.headers["Content-Type"] = "application/json";
-        res.body = "{\"error\":\"SSE stream not supported, use POST\"}";
+        res.statusCode = 200;
+        res.statusText = "OK";
+        res.headers["Content-Type"] = "text/event-stream";
+        res.headers["Cache-Control"] = "no-cache";
+        res.headers["Connection"] = "keep-alive";
+        
+        std::string endpointEvent = "event: endpoint\ndata: /mcp?sessionId=" + newSessionId + "\n\n";
+        res.body = endpointEvent;
+        res.keepAlive = true;
+
         return res;
     }
 
-    HttpResponse McpHandler::handleDelete(const HttpRequest& req) {
+    HttpResponse McpHandler::handleDelete(const HttpRequest& req, int client_fd) {
         HttpResponse res;
 
-        auto sessionIt = req.headers.find("Mcp-Session-Id");
-        if (sessionIt == req.headers.end()) {
-            sessionIt = req.headers.find("mcp-session-id");
+        std::string sessionId = "";
+        size_t queryPos = req.path.find("sessionId=");
+        if (queryPos != std::string::npos) {
+            size_t endPos = req.path.find('&', queryPos);
+            if (endPos == std::string::npos) endPos = req.path.size();
+            sessionId = req.path.substr(queryPos + 10, endPos - (queryPos + 10));
         }
 
         std::lock_guard<std::mutex> lock(sessionMutex_);
-        if (sessionIt != req.headers.end() && sessionIt->second == sessionId_) {
-            sessionId_.clear();
-            initialized_ = false;
-            std::cerr << "[MCP] Session terminated by client." << std::endl;
+        if (!sessionId.empty() && activeSessions_.count(sessionId)) {
+            close(activeSessions_[sessionId]); // Close the SSE socket
+            activeSessions_.erase(sessionId);
+            std::cerr << "[MCP] Session terminated: " << sessionId << std::endl;
             res.statusCode = 200;
             res.statusText = "OK";
         } else {
@@ -201,18 +222,11 @@ namespace MCP {
     }
 
     json McpHandler::handleInitialize(const json& params, const json& id) {
-        std::lock_guard<std::mutex> lock(sessionMutex_);
-
-        // Generate new session
-        sessionId_ = generateSessionId();
-        initialized_ = false;
-
         std::string clientName = "unknown";
         if (params.contains("clientInfo") && params["clientInfo"].contains("name")) {
             clientName = params["clientInfo"]["name"].get<std::string>();
         }
         std::cerr << "[MCP] Initialize from client: " << clientName << std::endl;
-        std::cerr << "[MCP] Session ID: " << sessionId_ << std::endl;
 
         json result = {
             {"protocolVersion", "2026-03-23"},
