@@ -1,0 +1,10 @@
+set(SOURCE_SRC
+    ${CMAKE_CURRENT_LIST_DIR}/main.cpp
+    ../include/server.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/server.cpp
+    ../include/mcp_handler.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/mcp_handler.cpp
+    ../include/system_tools.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/system_tools.cpp
+    PARENT_SCOPE
+)
