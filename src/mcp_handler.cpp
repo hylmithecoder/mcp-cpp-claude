@@ -6,15 +6,12 @@
 
 namespace MCP {
 
-    McpHandler::McpHandler() {
-        DataBase db("history.db");
-
-        FormatInput data;
-        data.context = "Hello";
-        data.response = "Hello";
-        data.timestamp = "2022-01-01 00:00:00";
-        db.insertData(data, db.db);
-        cout << db.readTheContext(db.db, 1) << endl;
+    std::string getCurrentTimestamp() {
+        auto now = std::chrono::system_clock::now();
+        auto in_time_t = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << std::put_time(std::localtime(&in_time_t), "%Y-%m-%d %H:%M:%S");
+        return ss.str();
     }
 
     string McpHandler::generateSessionId() {
@@ -265,13 +262,25 @@ namespace MCP {
     }
 
     json McpHandler::handleToolsCall(const json& params, const json& id) {
-        string toolName = params.value("name", "");
+        if (!params.contains("name")) {
+            return makeError(id, -32602, "Missing tool name");
+        }
+
+        std::string toolName = params["name"];
         json arguments = params.value("arguments", json::object());
 
         cerr << "[MCP] Calling tool: " << toolName << endl;
 
         try {
             json toolResult = tools_.callTool(toolName, arguments);
+
+            // Record to history database
+            FormatInput historyData;
+            historyData.context = toolName + "(" + arguments.dump() + ")";
+            historyData.response = toolResult.dump();
+            historyData.timestamp = getCurrentTimestamp();
+            db_.insertData(historyData, db_.db);
+
             return makeResponse(id, toolResult);
         } catch (const exception& e) {
             json errorResult = {

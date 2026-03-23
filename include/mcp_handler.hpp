@@ -6,6 +6,7 @@
 #include "server.hpp"
 #include "system_tools.hpp"
 #include "handledb.hpp"
+#include <mutex>
 
 using namespace std;
 using namespace Tools;
@@ -15,13 +16,14 @@ namespace MCP {
 
     class McpHandler {
     public:
-        McpHandler();
+        McpHandler() : db_("mcp_history.db"), tools_(&db_) {}
 
         // Register all MCP routes on the server
         void registerRoutes(Server& server);
 
     private:
         SystemTools tools_;
+        Tools::DataBase db_;
 
         // Session management
         map<string, int> activeSessions_;

@@ -38,6 +38,27 @@ namespace MCP {
 
     json SystemTools::getToolDefinitions() const {
         return json::array({
+            {
+                {"name", "get_history"},
+                {"description", "Get the list of recently executed tool calls (summary)"},
+                {"inputSchema", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"limit", {{"type", "integer"}, {"description", "Number of records to fetch (default: 10)"}}} 
+                    }}
+                }}
+            },
+            {
+                {"name", "get_history_by_id"},
+                {"description", "Get detailed history including full result by session/title ID"},
+                {"inputSchema", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"id", {{"type", "integer"}, {"description", "The ID of the history entry"}}}
+                    }},
+                    {"required", {"id"}}
+                }}
+            },
             // 1. list_directory
             {
                 {"name", "list_directory"},

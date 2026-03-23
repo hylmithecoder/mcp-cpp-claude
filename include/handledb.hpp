@@ -1,3 +1,4 @@
+#pragma once
 #include <sqlite3.h>
 #include <iostream>
 #include <cstdint>
@@ -7,10 +8,10 @@
 using namespace std;
 using json = nlohmann::json;
 
-typedef struct FormatInput{
-    string context;
-    string response;
-    string timestamp;
+struct FormatInput {
+    std::string context;
+    std::string response;
+    std::string timestamp;
 };
 
 namespace Tools {

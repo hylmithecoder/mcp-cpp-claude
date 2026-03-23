@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <nlohmann/json.hpp>
+#include "handledb.hpp"
 
 using namespace std;
 using json = nlohmann::json;
@@ -11,13 +12,16 @@ namespace MCP {
 
     class SystemTools {
     public:
-        // Get the list of all tool definitions (for tools/list)
+        SystemTools(Tools::DataBase* db = nullptr) : db_(db) {}
+
+        // Get definitions of all tools
         json getToolDefinitions() const;
 
-        // Execute a tool by name with given arguments
+        // Call a tool by name with arguments
         json callTool(const string& name, const json& arguments);
 
     private:
+        Tools::DataBase* db_;
         // Individual tool implementations
         json listDirectory(const json& args);
         json readFile(const json& args);
@@ -27,6 +31,8 @@ namespace MCP {
         json listProcesses(const json& args);
         json listInstalledApps(const json& args);
         json runCommand(const json& args);
+        json getHistory(const json& args);
+        json getHistoryById(const json& args);
 
         // Utility: execute a shell command and capture output
         string exec(const string& cmd);
