@@ -1,76 +1,155 @@
-# Native C++ MCP Server
+<div align="center">
 
-A high-performance Model Context Protocol (MCP) server written in native C++ that enables AI assistants (like Claude) to interact securely and directly with your local Linux filesystem and OS. 
+# 🖥️ Native C++ MCP Server
 
-By default, this server listens on HTTP port `5500` and implements the **MCP Streamable HTTP** transport with JSON-RPC 2.0. This allows remote AI models to perform system-level operations on your machine via secure tunnels (e.g., reverse SSH, ngrok, Cloudflare Tunnels).
+**Give Claude direct access to your Linux machine — no Python, no Node.js, no runtime overhead.**
 
-## Features
+[![Language](https://img.shields.io/badge/language-C%2B%2B20-blue?logo=cplusplus)](https://isocpp.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux-orange?logo=linux)](https://kernel.org/)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Protocol](https://img.shields.io/badge/MCP-Streamable%20HTTP-purple)](https://modelcontextprotocol.io)
+[![Transport](https://img.shields.io/badge/transport-JSON--RPC%202.0-yellow)](https://www.jsonrpc.org/)
 
-This server exposes **8 core system tools** currently available to connected AI models:
+*Built from scratch in pure C++ — raw sockets, zero runtime dependencies.*
 
-1. `list_directory`: View files, directories, and their sizes.
-2. `read_file`: Read entire text files or specific line ranges (up to 1MB).
-3. `search_files`: Recursively search for matching filenames within directories.
-4. `get_file_info`: Inspect detailed metadata (permissions, owner, modification time).
-5. `get_system_info`: View host OS, kernel, CPU, RAM, and Disk usage.
-6. `list_processes`: Monitor running processes (sorted by CPU, memory, or PID).
-7. `list_installed_apps`: Discover installed desktop `.desktop` applications.
-8. `run_command`: Execute custom bash commands and capture `stdout`/`stderr` (with timeout protection).
+</div>
 
-## Prerequisites
+---
 
-- GCC / G++ (supporting C++20)
-- CMake (>= 3.14)
-- POSIX-compliant Linux (for `sys/socket.h`, `pthread`, `popen`, etc.)
-- SQLite3 (optional for legacy components, but core MCP does not require it)
+## ✨ What is this?
 
-## Build & Installation
+A **Model Context Protocol (MCP) server** written in native C++ that lets AI assistants like **Claude** interact directly with your local Linux system. No Python interpreter, no Node.js runtime — just a lean compiled binary that wakes up in milliseconds.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/hylmithecoder/mcp-cpp-claude.git
-   cd mcp-cpp-claude
-   ```
+Connect it to Claude.ai via a tunnel (SSH, ngrok, Cloudflare) and Claude can:
+- 📁 Browse your filesystem
+- 📄 Read your source files
+- ⚙️ Execute shell commands
+- 📊 Monitor your system in real-time
 
-2. **Build with CMake:**
-   ```bash
-   cmake -B build
-   cmake --build build
-   ```
+```
+ ┌─────────────┐   HTTPS Tunnel   ┌──────────────────┐   localhost:5500  ┌─────────────────┐
+ │  Claude.ai  │ ◄──────────────► │  Tunnel (ngrok / │ ◄───────────────► │  MCP C++ Server │
+ │   (Web UI)  │  MCP over HTTP   │  SSH / Cloudflare)│   JSON-RPC 2.0   │  (your machine) │
+ └─────────────┘                  └──────────────────┘                   └─────────────────┘
+```
 
-3. **Run the Server:**
-   ```bash
-   ./build/mcp
-   ```
-   *The server will start listening on `http://0.0.0.0:5500/mcp`.*
+---
 
-## Integration Setup (Claude.ai Web)
+## 🛠️ Tools Available
 
-To use this server with Claude.ai web, you need to expose your local port `5500` to the internet.
+| Tool | Description |
+|------|-------------|
+| `list_directory` | List files & directories with sizes |
+| `read_file` | Read text files or specific line ranges (up to 1MB) |
+| `search_files` | Recursively search by filename pattern |
+| `get_file_info` | File metadata: permissions, owner, timestamps |
+| `get_system_info` | OS, kernel, CPU, RAM, disk usage |
+| `list_processes` | Running processes sorted by CPU/memory/PID |
+| `list_installed_apps` | Discover installed .desktop applications |
+| `run_command` | Execute shell commands with timeout protection |
 
-**Option 1: Using ngrok**
+---
+
+## ⚡ Quick Start
+
+### Prerequisites
+- GCC / G++ with C++20 support
+- CMake >= 3.14
+- SQLite3: `sudo apt install libsqlite3-dev`
+
+### Build & Run
+
+```bash
+git clone https://github.com/hylmithecoder/mcp-cpp-claude.git
+cd mcp-cpp-claude
+
+cmake -B build
+cmake --build build
+
+./build/mcp
+# 🚀 MCP Server listening on http://0.0.0.0:5500/mcp
+```
+
+### Connect to Claude.ai
+
+Expose your local port via a tunnel, then add the URL in **Claude.ai → Settings → Integrations → Add MCP Server**.
+
+**Option 1 — ngrok:**
 ```bash
 ngrok http 5500
+# Copy https://xxxx.ngrok-free.app/mcp → paste to Claude.ai
 ```
-Then copy the `https://...ngrok-free.app/mcp` URL into Claude.ai.
 
-## Future Updates Roadmap
+**Option 2 — Cloudflare Tunnel:**
+```bash
+cloudflared tunnel --url http://localhost:5500
+```
 
-The following enhancements are planned for future releases:
+**Option 3 — Reverse SSH to VPS:**
+```bash
+ssh -R 5500:localhost:5500 user@your-vps-ip
+```
 
-- **Authentication & Security:** 
-  - Implementation of token-based authentication (Bearer tokens / API Keys) to prevent unauthorized access to the `run_command` and filesystem tools when exposed publicly.
-- **Enhanced SSE (Server-Sent Events) Support:** 
-  - Fully bidirectional Server-Sent Events to allow the server to push real-time updates (e.g., long-running command output streaming, filesystem watching) directly to the AI model.
-- **Resource Templates:** 
-  - Support for the MCP `resources/list` and `resources/read` protocols, allowing the AI to subscribe to file changes natively rather than polling.
-- **Windows / macOS Support:** 
-  - Refactoring POSIX-specific APIs (`dirent.h`, `sys/socket.h`, `popen`) to use abstract multi-platform libraries (like ASIO or libuv) for cross-platform compatibility.
-- **Custom Tool Configurations:** 
-  - A JSON/YAML configuration file to selectively enable/disable specific dangerous tools (like `run_command`) without recompiling.
-- **History Execution Locally:** 
-  - At least i will create a history execution locally, so the AI can see the history of the commands that have been executed.
+---
 
-## License
+## 🏗️ Architecture
 
-This project is licensed under the [MIT License](LICENSE).
+```
+mcp-cpp-claude/
+├── include/
+│   ├── server.hpp          # Raw TCP socket HTTP server
+│   ├── mcp_handler.hpp     # MCP protocol + JSON-RPC routing
+│   ├── system_tools.hpp    # Tool definitions & implementations
+│   └── handledb.hpp        # SQLite3 history logging
+├── src/
+│   ├── main.cpp            # Entry point
+│   ├── server.cpp          # HTTP/1.1 parser, thread-per-client
+│   ├── mcp_handler.cpp     # initialize / tools/list / tools/call
+│   ├── system_tools.cpp    # All 8 tool implementations
+│   └── handledb.cpp        # DB init, insert, read
+└── CMakeLists.txt
+```
+
+**Key design decisions:**
+- **Thread-per-client** via `pthread` — each connection isolated
+- **Dual response mode** — direct HTTP body (Claude.ai web) or SSE stream
+- **SQLite history** — every tool call logged locally for auditability
+
+---
+
+## 🔒 Security Notice
+
+> ⚠️ **`run_command` executes arbitrary shell commands.** Never expose to the public internet without authentication.
+
+For now, use a private tunnel (SSH reverse forwarding to a VPS you control). Bearer token auth is on the roadmap.
+
+---
+
+## 🗺️ Roadmap
+
+- [ ] **Bearer token auth** — protect `run_command` from unauthorized access
+- [ ] **Streaming SSE output** — real-time stdout for long-running commands
+- [ ] **MCP Resources protocol** — `resources/list` + `resources/read`
+- [ ] **Tool config file** — enable/disable tools without recompile
+- [ ] **Windows / macOS support** — cross-platform via ASIO or libuv
+- [x] **Execution history** — SQLite logging of all tool calls
+
+---
+
+## 🤝 Contributing
+
+PRs welcome! Add new tools in `src/system_tools.cpp` and register in `getToolDefinitions()`.
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) — © 2026 Hylmi
+
+---
+
+<div align="center">
+
+*Built with ❤️ and raw C++ sockets. No frameworks were harmed in the making of this server.*
+
+</div>
