@@ -4,6 +4,7 @@
 #include <vector>
 #include <nlohmann/json.hpp>
 
+using namespace std;
 using json = nlohmann::json;
 
 namespace MCP {
@@ -14,7 +15,7 @@ namespace MCP {
         json getToolDefinitions() const;
 
         // Execute a tool by name with given arguments
-        json callTool(const std::string& name, const json& arguments);
+        json callTool(const string& name, const json& arguments);
 
     private:
         // Individual tool implementations
@@ -28,10 +29,10 @@ namespace MCP {
         json runCommand(const json& args);
 
         // Utility: execute a shell command and capture output
-        std::string exec(const std::string& cmd);
+        string exec(const string& cmd);
 
         // Utility: make tool result content
-        json makeTextResult(const std::string& text, bool isError = false);
+        json makeTextResult(const string& text, bool isError = false);
     };
 
 } // namespace MCP

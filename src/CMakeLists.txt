@@ -6,5 +6,7 @@ set(SOURCE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/mcp_handler.cpp
     ../include/system_tools.hpp
     ${CMAKE_CURRENT_LIST_DIR}/system_tools.cpp
+    ../include/handledb.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/handledb.cpp
     PARENT_SCOPE
 )

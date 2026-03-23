@@ -6,17 +6,26 @@
 
 namespace MCP {
 
-    McpHandler::McpHandler() {}
+    McpHandler::McpHandler() {
+        DataBase db("history.db");
 
-    std::string McpHandler::generateSessionId() {
+        FormatInput data;
+        data.context = "Hello";
+        data.response = "Hello";
+        data.timestamp = "2022-01-01 00:00:00";
+        db.insertData(data, db.db);
+        cout << db.readTheContext(db.db, 1) << endl;
+    }
+
+    string McpHandler::generateSessionId() {
         // Generate a UUID-like session ID
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0, 15);
-        std::uniform_int_distribution<> dis2(8, 11);
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_int_distribution<> dis(0, 15);
+        uniform_int_distribution<> dis2(8, 11);
 
-        std::stringstream ss;
-        ss << std::hex;
+        stringstream ss;
+        ss << hex;
         for (int i = 0; i < 8; i++) ss << dis(gen);
         ss << "-";
         for (int i = 0; i < 4; i++) ss << dis(gen);
@@ -64,7 +73,7 @@ namespace MCP {
             res.statusCode = 400;
             res.statusText = "Bad Request";
             res.headers["Content-Type"] = "application/json";
-            res.body = makeError(nullptr, -32700, "Parse error: " + std::string(e.what())).dump();
+            res.body = makeError(nullptr, -32700, "Parse error: " + string(e.what())).dump();
             return res;
         }
 
@@ -90,11 +99,11 @@ namespace MCP {
 
         // Handle notifications — return 202 Accepted
         if (isNotification) {
-            std::string method = request["method"].get<std::string>();
-            std::cerr << "[MCP] Notification: " << method << std::endl;
+            string method = request["method"].get<string>();
+            cerr << "[MCP] Notification: " << method << endl;
 
             if (method == "notifications/initialized") {
-                std::cerr << "[MCP] Client initialized, session is active." << std::endl;
+                cerr << "[MCP] Client initialized, session is active." << endl;
             }
 
             res.statusCode = 202;
@@ -104,15 +113,15 @@ namespace MCP {
 
         // Handle requests
         if (isRequest) {
-            std::string method = request.value("method", "");
-            std::cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ")" << std::endl;
+            string method = request.value("method", "");
+            cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ")" << endl;
 
             // Extract sessionId from query string or headers
-            std::string sessionId = "";
+            string sessionId = "";
             size_t queryPos = req.path.find("sessionId=");
-            if (queryPos != std::string::npos) {
+            if (queryPos != string::npos) {
                 size_t endPos = req.path.find('&', queryPos);
-                if (endPos == std::string::npos) endPos = req.path.size();
+                if (endPos == string::npos) endPos = req.path.size();
                 sessionId = req.path.substr(queryPos + 10, endPos - (queryPos + 10));
             } else {
                 auto sessionIt = req.headers.find("Mcp-Session-Id");
@@ -122,7 +131,7 @@ namespace MCP {
 
             int sse_fd = -1;
             {
-                std::lock_guard<std::mutex> lock(sessionMutex_);
+                lock_guard<mutex> lock(sessionMutex_);
                 if (activeSessions_.count(sessionId)) {
                     sse_fd = activeSessions_[sessionId];
                 }
@@ -139,7 +148,7 @@ namespace MCP {
             json result = processJsonRpc(request);
 
             // Send SSE Message
-            std::string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
+            string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
             send(sse_fd, sseMessage.c_str(), sseMessage.size(), 0);
 
             // Respond 202 Accepted to the POST request
@@ -155,14 +164,14 @@ namespace MCP {
     }
 
     HttpResponse McpHandler::handleGet(const HttpRequest& req, int client_fd) {
-        std::string newSessionId = generateSessionId();
+        string newSessionId = generateSessionId();
         
         {
-            std::lock_guard<std::mutex> lock(sessionMutex_);
+            lock_guard<mutex> lock(sessionMutex_);
             activeSessions_[newSessionId] = client_fd;
         }
 
-        std::cerr << "[MCP] New SSE stream opened, session ID: " << newSessionId << std::endl;
+        cerr << "[MCP] New SSE stream opened, session ID: " << newSessionId << endl;
 
         HttpResponse res;
         res.statusCode = 200;
@@ -171,7 +180,7 @@ namespace MCP {
         res.headers["Cache-Control"] = "no-cache";
         res.headers["Connection"] = "keep-alive";
         
-        std::string endpointEvent = "event: endpoint\ndata: /mcp?sessionId=" + newSessionId + "\n\n";
+        string endpointEvent = "event: endpoint\ndata: /mcp?sessionId=" + newSessionId + "\n\n";
         res.body = endpointEvent;
         res.keepAlive = true;
 
@@ -181,19 +190,19 @@ namespace MCP {
     HttpResponse McpHandler::handleDelete(const HttpRequest& req, int client_fd) {
         HttpResponse res;
 
-        std::string sessionId = "";
+        string sessionId = "";
         size_t queryPos = req.path.find("sessionId=");
-        if (queryPos != std::string::npos) {
+        if (queryPos != string::npos) {
             size_t endPos = req.path.find('&', queryPos);
-            if (endPos == std::string::npos) endPos = req.path.size();
+            if (endPos == string::npos) endPos = req.path.size();
             sessionId = req.path.substr(queryPos + 10, endPos - (queryPos + 10));
         }
 
-        std::lock_guard<std::mutex> lock(sessionMutex_);
+        lock_guard<mutex> lock(sessionMutex_);
         if (!sessionId.empty() && activeSessions_.count(sessionId)) {
             close(activeSessions_[sessionId]); // Close the SSE socket
             activeSessions_.erase(sessionId);
-            std::cerr << "[MCP] Session terminated: " << sessionId << std::endl;
+            cerr << "[MCP] Session terminated: " << sessionId << endl;
             res.statusCode = 200;
             res.statusText = "OK";
         } else {
@@ -204,7 +213,7 @@ namespace MCP {
     }
 
     json McpHandler::processJsonRpc(const json& request) {
-        std::string method = request.value("method", "");
+        string method = request.value("method", "");
         json id = request.value("id", json(nullptr));
         json params = request.value("params", json::object());
 
@@ -222,11 +231,11 @@ namespace MCP {
     }
 
     json McpHandler::handleInitialize(const json& params, const json& id) {
-        std::string clientName = "unknown";
+        string clientName = "unknown";
         if (params.contains("clientInfo") && params["clientInfo"].contains("name")) {
-            clientName = params["clientInfo"]["name"].get<std::string>();
+            clientName = params["clientInfo"]["name"].get<string>();
         }
-        std::cerr << "[MCP] Initialize from client: " << clientName << std::endl;
+        cerr << "[MCP] Initialize from client: " << clientName << endl;
 
         json result = {
             {"protocolVersion", "2026-03-23"},
@@ -256,18 +265,18 @@ namespace MCP {
     }
 
     json McpHandler::handleToolsCall(const json& params, const json& id) {
-        std::string toolName = params.value("name", "");
+        string toolName = params.value("name", "");
         json arguments = params.value("arguments", json::object());
 
-        std::cerr << "[MCP] Calling tool: " << toolName << std::endl;
+        cerr << "[MCP] Calling tool: " << toolName << endl;
 
         try {
             json toolResult = tools_.callTool(toolName, arguments);
             return makeResponse(id, toolResult);
-        } catch (const std::exception& e) {
+        } catch (const exception& e) {
             json errorResult = {
                 {"content", json::array({
-                    {{"type", "text"}, {"text", std::string("Error: ") + e.what()}}
+                    {{"type", "text"}, {"text", string("Error: ") + e.what()}}
                 })},
                 {"isError", true}
             };
@@ -287,7 +296,7 @@ namespace MCP {
         };
     }
 
-    json McpHandler::makeError(const json& id, int code, const std::string& message) {
+    json McpHandler::makeError(const json& id, int code, const string& message) {
         return {
             {"jsonrpc", "2.0"},
             {"id", id},

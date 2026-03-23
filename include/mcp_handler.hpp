@@ -5,7 +5,10 @@
 #include <nlohmann/json.hpp>
 #include "server.hpp"
 #include "system_tools.hpp"
+#include "handledb.hpp"
 
+using namespace std;
+using namespace Tools;
 using json = nlohmann::json;
 
 namespace MCP {
@@ -21,11 +24,11 @@ namespace MCP {
         SystemTools tools_;
 
         // Session management
-        std::map<std::string, int> activeSessions_;
-        std::mutex sessionMutex_;
+        map<string, int> activeSessions_;
+        mutex sessionMutex_;
 
         // Generate a session ID
-        std::string generateSessionId();
+        string generateSessionId();
 
         // Handle POST /mcp (JSON-RPC messages)
         HttpResponse handlePost(const HttpRequest& req, int client_fd);
@@ -47,7 +50,7 @@ namespace MCP {
 
         // Build JSON-RPC response
         json makeResponse(const json& id, const json& result);
-        json makeError(const json& id, int code, const std::string& message);
+        json makeError(const json& id, int code, const string& message);
     };
 
 } // namespace MCP

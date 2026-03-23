@@ -10,14 +10,14 @@
 #include <grp.h>
 #include <dirent.h>
 
-namespace fs = std::filesystem;
+namespace fs = filesystem;
 
 namespace MCP {
 
-    std::string SystemTools::exec(const std::string& cmd) {
-        std::array<char, 4096> buffer;
-        std::string result;
-        std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    string SystemTools::exec(const string& cmd) {
+        array<char, 4096> buffer;
+        string result;
+        unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
         if (!pipe) {
             return "Error: Failed to execute command";
         }
@@ -27,7 +27,7 @@ namespace MCP {
         return result;
     }
 
-    json SystemTools::makeTextResult(const std::string& text, bool isError) {
+    json SystemTools::makeTextResult(const string& text, bool isError) {
         return {
             {"content", json::array({
                 {{"type", "text"}, {"text", text}}
@@ -178,7 +178,7 @@ namespace MCP {
         });
     }
 
-    json SystemTools::callTool(const std::string& name, const json& arguments) {
+    json SystemTools::callTool(const string& name, const json& arguments) {
         if (name == "list_directory") return listDirectory(arguments);
         if (name == "read_file") return readFile(arguments);
         if (name == "search_files") return searchFiles(arguments);
@@ -194,7 +194,7 @@ namespace MCP {
     // ==================== Tool Implementations ====================
 
     json SystemTools::listDirectory(const json& args) {
-        std::string path = args.value("path", "");
+        string path = args.value("path", "");
         if (path.empty()) {
             const char* home = getenv("HOME");
             path = home ? home : "/";
@@ -208,52 +208,52 @@ namespace MCP {
                 return makeTextResult("Error: Not a directory: " + path, true);
             }
 
-            std::ostringstream oss;
+            ostringstream oss;
             oss << "Directory: " << path << "\n\n";
-            oss << std::left << std::setw(50) << "Name"
-                << std::setw(12) << "Type"
+            oss << left << setw(50) << "Name"
+                << setw(12) << "Type"
                 << "Size" << "\n";
-            oss << std::string(75, '-') << "\n";
+            oss << string(75, '-') << "\n";
 
-            std::vector<fs::directory_entry> entries;
+            vector<fs::directory_entry> entries;
             for (const auto& entry : fs::directory_iterator(path, fs::directory_options::skip_permission_denied)) {
                 entries.push_back(entry);
             }
 
             // Sort: directories first, then files
-            std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
+            sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
                 if (a.is_directory() != b.is_directory()) return a.is_directory() > b.is_directory();
                 return a.path().filename() < b.path().filename();
             });
 
             for (const auto& entry : entries) {
-                std::string name = entry.path().filename().string();
-                std::string type = entry.is_directory() ? "directory" : "file";
-                std::string size = "-";
+                string name = entry.path().filename().string();
+                string type = entry.is_directory() ? "directory" : "file";
+                string size = "-";
 
                 if (entry.is_regular_file()) {
                     auto sz = entry.file_size();
-                    if (sz < 1024) size = std::to_string(sz) + " B";
-                    else if (sz < 1024*1024) size = std::to_string(sz/1024) + " KB";
-                    else if (sz < 1024*1024*1024) size = std::to_string(sz/(1024*1024)) + " MB";
-                    else size = std::to_string(sz/(1024*1024*1024)) + " GB";
+                    if (sz < 1024) size = to_string(sz) + " B";
+                    else if (sz < 1024*1024) size = to_string(sz/1024) + " KB";
+                    else if (sz < 1024*1024*1024) size = to_string(sz/(1024*1024)) + " MB";
+                    else size = to_string(sz/(1024*1024*1024)) + " GB";
                 }
 
-                oss << std::left << std::setw(50) << name
-                    << std::setw(12) << type
+                oss << left << setw(50) << name
+                    << setw(12) << type
                     << size << "\n";
             }
 
             oss << "\nTotal: " << entries.size() << " items";
             return makeTextResult(oss.str());
 
-        } catch (const std::exception& e) {
-            return makeTextResult("Error listing directory: " + std::string(e.what()), true);
+        } catch (const exception& e) {
+            return makeTextResult("Error listing directory: " + string(e.what()), true);
         }
     }
 
     json SystemTools::readFile(const json& args) {
-        std::string path = args.value("path", "");
+        string path = args.value("path", "");
         if (path.empty()) {
             return makeTextResult("Error: 'path' is required", true);
         }
@@ -269,10 +269,10 @@ namespace MCP {
             // Check file size — limit to 1MB
             auto fileSize = fs::file_size(path);
             if (fileSize > 1024 * 1024) {
-                return makeTextResult("Error: File too large (" + std::to_string(fileSize) + " bytes). Max 1MB. Use start_line/end_line to read portions.", true);
+                return makeTextResult("Error: File too large (" + to_string(fileSize) + " bytes). Max 1MB. Use start_line/end_line to read portions.", true);
             }
 
-            std::ifstream file(path);
+            ifstream file(path);
             if (!file.is_open()) {
                 return makeTextResult("Error: Cannot open file: " + path, true);
             }
@@ -280,15 +280,15 @@ namespace MCP {
             int startLine = args.value("start_line", 0);
             int endLine = args.value("end_line", 0);
 
-            std::ostringstream oss;
+            ostringstream oss;
 
             if (startLine > 0 || endLine > 0) {
                 // Read specific line range
-                std::string line;
+                string line;
                 int lineNum = 0;
-                int actualStart = std::max(1, startLine);
+                int actualStart = max(1, startLine);
 
-                while (std::getline(file, line)) {
+                while (getline(file, line)) {
                     lineNum++;
                     if (lineNum < actualStart) continue;
                     if (endLine > 0 && lineNum > endLine) break;
@@ -305,14 +305,14 @@ namespace MCP {
 
             return makeTextResult(oss.str());
 
-        } catch (const std::exception& e) {
-            return makeTextResult("Error reading file: " + std::string(e.what()), true);
+        } catch (const exception& e) {
+            return makeTextResult("Error reading file: " + string(e.what()), true);
         }
     }
 
     json SystemTools::searchFiles(const json& args) {
-        std::string path = args.value("path", "");
-        std::string pattern = args.value("pattern", "");
+        string path = args.value("path", "");
+        string pattern = args.value("pattern", "");
         int maxResults = args.value("max_results", 50);
 
         if (path.empty() || pattern.empty()) {
@@ -324,7 +324,7 @@ namespace MCP {
                 return makeTextResult("Error: Path does not exist: " + path, true);
             }
 
-            std::ostringstream oss;
+            ostringstream oss;
             oss << "Search: \"" << pattern << "\" in " << path << "\n\n";
 
             int count = 0;
@@ -333,15 +333,15 @@ namespace MCP {
                  it != fs::recursive_directory_iterator() && count < maxResults;
                  ++it) {
                 try {
-                    std::string name = it->path().filename().string();
+                    string name = it->path().filename().string();
                     // Case-insensitive substring match
-                    std::string lowerName = name;
-                    std::string lowerPattern = pattern;
-                    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-                    std::transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(), ::tolower);
+                    string lowerName = name;
+                    string lowerPattern = pattern;
+                    transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                    transform(lowerPattern.begin(), lowerPattern.end(), lowerPattern.begin(), ::tolower);
 
-                    if (lowerName.find(lowerPattern) != std::string::npos) {
-                        std::string type = it->is_directory() ? "[DIR] " : "[FILE]";
+                    if (lowerName.find(lowerPattern) != string::npos) {
+                        string type = it->is_directory() ? "[DIR] " : "[FILE]";
                         oss << type << " " << it->path().string() << "\n";
                         count++;
                     }
@@ -359,13 +359,13 @@ namespace MCP {
 
             return makeTextResult(oss.str());
 
-        } catch (const std::exception& e) {
-            return makeTextResult("Error searching: " + std::string(e.what()), true);
+        } catch (const exception& e) {
+            return makeTextResult("Error searching: " + string(e.what()), true);
         }
     }
 
     json SystemTools::getFileInfo(const json& args) {
-        std::string path = args.value("path", "");
+        string path = args.value("path", "");
         if (path.empty()) {
             return makeTextResult("Error: 'path' is required", true);
         }
@@ -380,11 +380,11 @@ namespace MCP {
                 return makeTextResult("Error: Cannot stat file: " + path, true);
             }
 
-            std::ostringstream oss;
+            ostringstream oss;
             oss << "File Info: " << path << "\n\n";
 
             // Type
-            std::string type;
+            string type;
             if (S_ISREG(st.st_mode)) type = "Regular file";
             else if (S_ISDIR(st.st_mode)) type = "Directory";
             else if (S_ISLNK(st.st_mode)) type = "Symbolic link";
@@ -398,7 +398,7 @@ namespace MCP {
             oss << "Size:        " << st.st_size << " bytes\n";
 
             // Permissions
-            std::string perms;
+            string perms;
             perms += (st.st_mode & S_IRUSR) ? 'r' : '-';
             perms += (st.st_mode & S_IWUSR) ? 'w' : '-';
             perms += (st.st_mode & S_IXUSR) ? 'x' : '-';
@@ -408,13 +408,13 @@ namespace MCP {
             perms += (st.st_mode & S_IROTH) ? 'r' : '-';
             perms += (st.st_mode & S_IWOTH) ? 'w' : '-';
             perms += (st.st_mode & S_IXOTH) ? 'x' : '-';
-            oss << "Permissions: " << perms << " (" << std::oct << (st.st_mode & 0777) << std::dec << ")\n";
+            oss << "Permissions: " << perms << " (" << oct << (st.st_mode & 0777) << dec << ")\n";
 
             // Owner/Group
             struct passwd* pw = getpwuid(st.st_uid);
             struct group* gr = getgrgid(st.st_gid);
-            oss << "Owner:       " << (pw ? pw->pw_name : std::to_string(st.st_uid)) << "\n";
-            oss << "Group:       " << (gr ? gr->gr_name : std::to_string(st.st_gid)) << "\n";
+            oss << "Owner:       " << (pw ? pw->pw_name : to_string(st.st_uid)) << "\n";
+            oss << "Group:       " << (gr ? gr->gr_name : to_string(st.st_gid)) << "\n";
 
             // Times
             char timebuf[64];
@@ -429,61 +429,61 @@ namespace MCP {
 
             return makeTextResult(oss.str());
 
-        } catch (const std::exception& e) {
-            return makeTextResult("Error: " + std::string(e.what()), true);
+        } catch (const exception& e) {
+            return makeTextResult("Error: " + string(e.what()), true);
         }
     }
 
     json SystemTools::getSystemInfo(const json& args) {
-        std::ostringstream oss;
+        ostringstream oss;
 
         oss << "=== System Information ===\n\n";
 
         // Hostname
-        std::string hostname = exec("hostname 2>/dev/null");
+        string hostname = exec("hostname 2>/dev/null");
         if (!hostname.empty() && hostname.back() == '\n') hostname.pop_back();
         oss << "Hostname:     " << hostname << "\n";
 
         // OS
-        std::string os = exec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
+        string os = exec("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'");
         if (!os.empty() && os.back() == '\n') os.pop_back();
         oss << "OS:           " << os << "\n";
 
         // Kernel
-        std::string kernel = exec("uname -r 2>/dev/null");
+        string kernel = exec("uname -r 2>/dev/null");
         if (!kernel.empty() && kernel.back() == '\n') kernel.pop_back();
         oss << "Kernel:       " << kernel << "\n";
 
         // Architecture
-        std::string arch = exec("uname -m 2>/dev/null");
+        string arch = exec("uname -m 2>/dev/null");
         if (!arch.empty() && arch.back() == '\n') arch.pop_back();
         oss << "Architecture: " << arch << "\n";
 
         // CPU
-        std::string cpu = exec("cat /proc/cpuinfo 2>/dev/null | grep 'model name' | head -1 | cut -d: -f2");
+        string cpu = exec("cat /proc/cpuinfo 2>/dev/null | grep 'model name' | head -1 | cut -d: -f2");
         if (!cpu.empty() && cpu[0] == ' ') cpu = cpu.substr(1);
         if (!cpu.empty() && cpu.back() == '\n') cpu.pop_back();
-        std::string cpuCores = exec("nproc 2>/dev/null");
+        string cpuCores = exec("nproc 2>/dev/null");
         if (!cpuCores.empty() && cpuCores.back() == '\n') cpuCores.pop_back();
         oss << "CPU:          " << cpu << " (" << cpuCores << " cores)\n";
 
         // Memory
-        std::string mem = exec("free -h 2>/dev/null | grep Mem | awk '{print \"Total: \" $2 \", Used: \" $3 \", Free: \" $4}'");
+        string mem = exec("free -h 2>/dev/null | grep Mem | awk '{print \"Total: \" $2 \", Used: \" $3 \", Free: \" $4}'");
         if (!mem.empty() && mem.back() == '\n') mem.pop_back();
         oss << "Memory:       " << mem << "\n";
 
         // Disk
-        std::string disk = exec("df -h / 2>/dev/null | tail -1 | awk '{print \"Total: \" $2 \", Used: \" $3 \" (\" $5 \"), Free: \" $4}'");
+        string disk = exec("df -h / 2>/dev/null | tail -1 | awk '{print \"Total: \" $2 \", Used: \" $3 \" (\" $5 \"), Free: \" $4}'");
         if (!disk.empty() && disk.back() == '\n') disk.pop_back();
         oss << "Disk (/):     " << disk << "\n";
 
         // Uptime
-        std::string uptime = exec("uptime -p 2>/dev/null");
+        string uptime = exec("uptime -p 2>/dev/null");
         if (!uptime.empty() && uptime.back() == '\n') uptime.pop_back();
         oss << "Uptime:       " << uptime << "\n";
 
         // Current user
-        std::string user = exec("whoami 2>/dev/null");
+        string user = exec("whoami 2>/dev/null");
         if (!user.empty() && user.back() == '\n') user.pop_back();
         oss << "User:         " << user << "\n";
 
@@ -491,32 +491,32 @@ namespace MCP {
     }
 
     json SystemTools::listProcesses(const json& args) {
-        std::string sortBy = args.value("sort_by", "cpu");
+        string sortBy = args.value("sort_by", "cpu");
         int limit = args.value("limit", 20);
 
-        std::string sortFlag = "--sort=-%cpu";
+        string sortFlag = "--sort=-%cpu";
         if (sortBy == "mem") sortFlag = "--sort=-%mem";
         else if (sortBy == "pid") sortFlag = "--sort=pid";
 
-        std::string cmd = "ps aux " + sortFlag + " 2>/dev/null | head -" + std::to_string(limit + 1);
-        std::string output = exec(cmd);
+        string cmd = "ps aux " + sortFlag + " 2>/dev/null | head -" + to_string(limit + 1);
+        string output = exec(cmd);
 
         if (output.empty()) {
             return makeTextResult("Error: Unable to list processes", true);
         }
 
-        return makeTextResult("Running Processes (sorted by " + sortBy + ", top " + std::to_string(limit) + "):\n\n" + output);
+        return makeTextResult("Running Processes (sorted by " + sortBy + ", top " + to_string(limit) + "):\n\n" + output);
     }
 
     json SystemTools::listInstalledApps(const json& args) {
-        std::string search = args.value("search", "");
+        string search = args.value("search", "");
 
-        std::ostringstream oss;
+        ostringstream oss;
         oss << "Installed Desktop Applications";
         if (!search.empty()) oss << " (filter: " << search << ")";
         oss << ":\n\n";
 
-        std::string appsDir = "/usr/share/applications";
+        string appsDir = "/usr/share/applications";
         int count = 0;
 
         try {
@@ -526,12 +526,12 @@ namespace MCP {
 
             for (const auto& entry : fs::directory_iterator(appsDir)) {
                 if (entry.path().extension() == ".desktop") {
-                    std::ifstream file(entry.path());
-                    std::string line;
-                    std::string appName, appComment, appExec;
+                    ifstream file(entry.path());
+                    string line;
+                    string appName, appComment, appExec;
                     bool inDesktopEntry = false;
 
-                    while (std::getline(file, line)) {
+                    while (getline(file, line)) {
                         if (line == "[Desktop Entry]") {
                             inDesktopEntry = true;
                             continue;
@@ -555,11 +555,11 @@ namespace MCP {
                     if (!appName.empty()) {
                         // Apply search filter
                         if (!search.empty()) {
-                            std::string lowerName = appName;
-                            std::string lowerSearch = search;
-                            std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-                            std::transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
-                            if (lowerName.find(lowerSearch) == std::string::npos) continue;
+                            string lowerName = appName;
+                            string lowerSearch = search;
+                            transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                            transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
+                            if (lowerName.find(lowerSearch) == string::npos) continue;
                         }
 
                         oss << "• " << appName;
@@ -573,16 +573,16 @@ namespace MCP {
             // Also check ~/.local/share/applications
             const char* home = getenv("HOME");
             if (home) {
-                std::string userAppsDir = std::string(home) + "/.local/share/applications";
+                string userAppsDir = string(home) + "/.local/share/applications";
                 if (fs::exists(userAppsDir)) {
                     for (const auto& entry : fs::directory_iterator(userAppsDir)) {
                         if (entry.path().extension() == ".desktop") {
-                            std::ifstream file(entry.path());
-                            std::string line;
-                            std::string appName;
+                            ifstream file(entry.path());
+                            string line;
+                            string appName;
                             bool inDesktopEntry = false;
 
-                            while (std::getline(file, line)) {
+                            while (getline(file, line)) {
                                 if (line == "[Desktop Entry]") { inDesktopEntry = true; continue; }
                                 if (line.size() > 0 && line[0] == '[') { inDesktopEntry = false; continue; }
                                 if (inDesktopEntry && line.substr(0, 5) == "Name=" && appName.empty()) {
@@ -592,11 +592,11 @@ namespace MCP {
 
                             if (!appName.empty()) {
                                 if (!search.empty()) {
-                                    std::string lowerName = appName;
-                                    std::string lowerSearch = search;
-                                    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
-                                    std::transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
-                                    if (lowerName.find(lowerSearch) == std::string::npos) continue;
+                                    string lowerName = appName;
+                                    string lowerSearch = search;
+                                    transform(lowerName.begin(), lowerName.end(), lowerName.begin(), ::tolower);
+                                    transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
+                                    if (lowerName.find(lowerSearch) == string::npos) continue;
                                 }
                                 oss << "• " << appName << " (user-installed)\n";
                                 count++;
@@ -606,8 +606,8 @@ namespace MCP {
                 }
             }
 
-        } catch (const std::exception& e) {
-            return makeTextResult("Error: " + std::string(e.what()), true);
+        } catch (const exception& e) {
+            return makeTextResult("Error: " + string(e.what()), true);
         }
 
         oss << "\nTotal: " << count << " applications";
@@ -615,7 +615,7 @@ namespace MCP {
     }
 
     json SystemTools::runCommand(const json& args) {
-        std::string command = args.value("command", "");
+        string command = args.value("command", "");
         int timeout = args.value("timeout", 30);
 
         if (command.empty()) {
@@ -623,10 +623,10 @@ namespace MCP {
         }
 
         // Wrap with timeout
-        std::string cmd = "timeout " + std::to_string(timeout) + " bash -c " +
+        string cmd = "timeout " + to_string(timeout) + " bash -c " +
                          "'" + command + "'" + " 2>&1";
 
-        std::string output = exec(cmd);
+        string output = exec(cmd);
 
         if (output.empty()) {
             output = "(command produced no output)";

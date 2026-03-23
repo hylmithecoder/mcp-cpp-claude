@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <nlohmann/json.hpp>
 
+using namespace std;
 using json = nlohmann::json;
 
 #define PORT 5500
@@ -23,25 +24,25 @@ namespace MCP {
 
     // Simple HTTP request structure
     struct HttpRequest {
-        std::string method;
-        std::string path;
-        std::map<std::string, std::string> headers;
-        std::string body;
+        string method;
+        string path;
+        map<string, string> headers;
+        string body;
     };
 
     // Simple HTTP response structure
     struct HttpResponse {
         int statusCode = 200;
-        std::string statusText = "OK";
-        std::map<std::string, std::string> headers;
-        std::string body;
+        string statusText = "OK";
+        map<string, string> headers;
+        string body;
         bool keepAlive = false;
 
-        std::string build() const;
+        string build() const;
     };
 
     // Route handler type
-    using RouteHandler = std::function<HttpResponse(const HttpRequest&, int)>;
+    using RouteHandler = function<HttpResponse(const HttpRequest&, int)>;
 
     class Server {
     public:
@@ -49,7 +50,7 @@ namespace MCP {
         ~Server();
 
         // Register route handlers
-        void route(const std::string& method, const std::string& path, RouteHandler handler);
+        void route(const string& method, const string& path, RouteHandler handler);
 
         // Start listening
         void start();
@@ -59,13 +60,13 @@ namespace MCP {
         int port_;
         int server_fd_ = -1;
         bool running_ = false;
-        std::mutex mutex_;
+        mutex mutex_;
 
         // Routes: method -> path -> handler
-        std::map<std::string, std::map<std::string, RouteHandler>> routes_;
+        map<string, map<string, RouteHandler>> routes_;
 
         // Parse raw HTTP request
-        HttpRequest parseRequest(const std::string& raw);
+        HttpRequest parseRequest(const string& raw);
 
         // Handle a single client connection
         void handleClient(int client_fd);

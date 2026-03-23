@@ -3,8 +3,8 @@
 namespace MCP {
 
     // Build HTTP response string
-    std::string HttpResponse::build() const {
-        std::ostringstream oss;
+    string HttpResponse::build() const {
+        ostringstream oss;
         oss << "HTTP/1.1 " << statusCode << " " << statusText << "\r\n";
         for (auto& [key, val] : headers) {
             oss << key << ": " << val << "\r\n";
@@ -23,7 +23,7 @@ namespace MCP {
         stop();
     }
 
-    void Server::route(const std::string& method, const std::string& path, RouteHandler handler) {
+    void Server::route(const string& method, const string& path, RouteHandler handler) {
         routes_[method][path] = handler;
     }
 
@@ -58,8 +58,8 @@ namespace MCP {
         }
 
         running_ = true;
-        std::cout << "🚀 MCP Server listening on http://0.0.0.0:" << port_ << "/mcp" << std::endl;
-        std::cout << "   Press Ctrl+C to stop." << std::endl;
+        cout << "🚀 MCP Server listening on http://0.0.0.0:" << port_ << "/mcp" << endl;
+        cout << "   Press Ctrl+C to stop." << endl;
 
         while (running_) {
             struct sockaddr_in client_addr;
@@ -72,7 +72,7 @@ namespace MCP {
             }
 
             // Spawn thread for each client
-            std::thread(&Server::handleClient, this, client_fd).detach();
+            thread(&Server::handleClient, this, client_fd).detach();
         }
     }
 
@@ -84,38 +84,38 @@ namespace MCP {
         }
     }
 
-    HttpRequest Server::parseRequest(const std::string& raw) {
+    HttpRequest Server::parseRequest(const string& raw) {
         HttpRequest req;
-        std::istringstream stream(raw);
-        std::string line;
+        istringstream stream(raw);
+        string line;
 
         // Parse request line: METHOD /path HTTP/1.1
-        if (std::getline(stream, line)) {
+        if (getline(stream, line)) {
             // Remove trailing \r
             if (!line.empty() && line.back() == '\r') line.pop_back();
-            std::istringstream reqLine(line);
+            istringstream reqLine(line);
             reqLine >> req.method >> req.path;
         }
 
         // Parse headers
-        while (std::getline(stream, line)) {
+        while (getline(stream, line)) {
             if (!line.empty() && line.back() == '\r') line.pop_back();
             if (line.empty()) break; // Empty line = end of headers
 
             auto colon = line.find(':');
-            if (colon != std::string::npos) {
-                std::string key = line.substr(0, colon);
-                std::string val = line.substr(colon + 1);
+            if (colon != string::npos) {
+                string key = line.substr(0, colon);
+                string val = line.substr(colon + 1);
                 // Trim leading spaces from value
                 size_t start = val.find_first_not_of(' ');
-                if (start != std::string::npos) val = val.substr(start);
+                if (start != string::npos) val = val.substr(start);
                 req.headers[key] = val;
             }
         }
 
         // Parse body (rest of the data)
-        std::string bodyPart;
-        while (std::getline(stream, bodyPart)) {
+        string bodyPart;
+        while (getline(stream, bodyPart)) {
             req.body += bodyPart;
             if (!stream.eof()) req.body += "\n";
         }
@@ -130,7 +130,7 @@ namespace MCP {
 
     void Server::handleClient(int client_fd) {
         char buffer[BUFFER_SIZE] = {0};
-        std::string rawData;
+        string rawData;
 
         // Read data — may need multiple reads for large bodies
         ssize_t total = 0;
@@ -143,21 +143,21 @@ namespace MCP {
             return;
         }
         buffer[bytes_read] = '\0';
-        rawData = std::string(buffer, bytes_read);
+        rawData = string(buffer, bytes_read);
 
         // Check if we need to read more (Content-Length)
         auto headerEnd = rawData.find("\r\n\r\n");
-        if (headerEnd != std::string::npos) {
+        if (headerEnd != string::npos) {
             // Parse Content-Length from headers
-            std::string headerSection = rawData.substr(0, headerEnd);
+            string headerSection = rawData.substr(0, headerEnd);
             size_t clPos = headerSection.find("Content-Length:");
-            if (clPos == std::string::npos) clPos = headerSection.find("content-length:");
+            if (clPos == string::npos) clPos = headerSection.find("content-length:");
 
-            if (clPos != std::string::npos) {
+            if (clPos != string::npos) {
                 size_t valStart = headerSection.find(':', clPos) + 1;
                 size_t valEnd = headerSection.find("\r\n", valStart);
-                if (valEnd == std::string::npos) valEnd = headerSection.size();
-                int contentLength = std::stoi(headerSection.substr(valStart, valEnd - valStart));
+                if (valEnd == string::npos) valEnd = headerSection.size();
+                int contentLength = stoi(headerSection.substr(valStart, valEnd - valStart));
 
                 size_t bodyStart = headerEnd + 4;
                 size_t bodyReceived = rawData.size() - bodyStart;
@@ -178,16 +178,16 @@ namespace MCP {
         // Handle CORS preflight
         if (req.method == "OPTIONS") {
             HttpResponse res = handleCors(req);
-            std::string response = res.build();
+            string response = res.build();
             send(client_fd, response.c_str(), response.size(), 0);
             close(client_fd);
             return;
         }
 
         // Find route handler (strip query string for matching)
-        std::string routePath = req.path;
+        string routePath = req.path;
         size_t qmark = routePath.find('?');
-        if (qmark != std::string::npos) {
+        if (qmark != string::npos) {
             routePath = routePath.substr(0, qmark);
         }
 
@@ -211,7 +211,7 @@ namespace MCP {
         }
 
         addCorsHeaders(res);
-        std::string response = res.build();
+        string response = res.build();
         send(client_fd, response.c_str(), response.size(), 0);
         
         if (!res.keepAlive) {
