@@ -111,20 +111,28 @@ namespace MCP {
         // Proses JSON-RPC
         json result = processJsonRpc(request);
 
-        // Kalau ada SSE session aktif, kirim lewat SSE dan balas 202
+        // Kalau ada SSE session aktif (dan punya FD valid), kirim lewat SSE dan balas 202
         {
             lock_guard<mutex> lock(sessionMutex_);
             if (!sessionId.empty() && activeSessions_.count(sessionId)) {
                 int sse_fd = activeSessions_[sessionId];
-                string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
-                send(sse_fd, sseMessage.c_str(), sseMessage.size(), 0);
-                res.statusCode = 202;
-                res.statusText = "Accepted";
-                return res;
+                if (sse_fd != -1) {
+                    cerr << "[MCP] Sending result via SSE (session: " << sessionId << ")" << endl;
+                    string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
+                    send(sse_fd, sseMessage.c_str(), sseMessage.size(), 0);
+                    res.statusCode = 202;
+                    res.statusText = "Accepted";
+                    return res;
+                } else {
+                    cerr << "[MCP] Session active but no SSE stream yet. Falling back to HTTP body." << endl;
+                }
+            } else if (!sessionId.empty()) {
+                cerr << "[MCP] Request had sessionId " << sessionId << " but it's not in activeSessions_. Falling back to HTTP body." << endl;
             }
         }
 
-        // ★ DEFAULT: Balas langsung dengan JSON di HTTP body (ini yang Claude web pakai)
+        // ★ DEFAULT: Balas langsung dengan JSON di HTTP body
+        cerr << "[MCP] Sending result directly in HTTP body" << endl;
         res.statusCode = 200;
         res.statusText = "OK";
         res.headers["Content-Type"] = "application/json";
@@ -200,6 +208,8 @@ namespace MCP {
         lock_guard<mutex> lock(sessionMutex_);
         if (!sessionId.empty() && activeSessions_.count(sessionId)) {
             close(activeSessions_[sessionId]); // Close the SSE socket
+            int fd = activeSessions_[sessionId];
+            if (fd != -1) close(fd);  // ← jangan close kalau fd=-1
             activeSessions_.erase(sessionId);
             cerr << "[MCP] Session terminated: " << sessionId << endl;
             res.statusCode = 200;
