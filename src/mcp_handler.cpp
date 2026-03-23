@@ -55,14 +55,7 @@ namespace MCP {
     HttpResponse McpHandler::handlePost(const HttpRequest& req, int client_fd) {
         HttpResponse res;
 
-        // Check Accept header
-        auto acceptIt = req.headers.find("Accept");
-        if (acceptIt == req.headers.end()) {
-            // Also check lowercase
-            acceptIt = req.headers.find("accept");
-        }
-
-        // Parse JSON-RPC message
+        // Parse JSON-RPC body
         json request;
         try {
             request = json::parse(req.body);
@@ -74,101 +67,109 @@ namespace MCP {
             return res;
         }
 
-        // Check if it's a notification (no id) or a response
-        bool isNotification = false;
-        bool isRequest = false;
-
+        // Handle batch array: proses item pertama untuk sekarang
         if (request.is_array()) {
-            // Batch — handle first item for now
-            // TODO: full batch support
-            if (!request.empty()) {
-                request = request[0];
-            }
+            if (!request.empty()) request = request[0];
+            else { res.statusCode = 204; return res; }
         }
 
-        if (request.contains("method")) {
-            if (request.contains("id")) {
-                isRequest = true;
-            } else {
-                isNotification = true;
-            }
-        }
-
-        // Handle notifications — return 202 Accepted
-        if (isNotification) {
+        // Notification (tidak ada "id") → 202 Accepted, tidak perlu response body
+        if (request.contains("method") && !request.contains("id")) {
             string method = request["method"].get<string>();
             cerr << "[MCP] Notification: " << method << endl;
-
-            if (method == "notifications/initialized") {
-                cerr << "[MCP] Client initialized, session is active." << endl;
-            }
-
             res.statusCode = 202;
             res.statusText = "Accepted";
             return res;
         }
 
-        // Handle requests
-        if (isRequest) {
-            string method = request.value("method", "");
-            cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ")" << endl;
+        // Bukan request yang valid
+        if (!request.contains("method")) {
+            res.statusCode = 202;
+            res.statusText = "Accepted";
+            return res;
+        }
 
-            // Extract sessionId from query string or headers
-            string sessionId = "";
+        string method = request.value("method", "");
+        cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ")" << endl;
+
+        // Cek apakah ada SSE session aktif untuk client ini
+        string sessionId = "";
+        auto sessionIt = req.headers.find("Mcp-Session-Id");
+        if (sessionIt == req.headers.end()) sessionIt = req.headers.find("mcp-session-id");
+        if (sessionIt != req.headers.end()) sessionId = sessionIt->second;
+
+        // Cek query string juga
+        if (sessionId.empty()) {
             size_t queryPos = req.path.find("sessionId=");
             if (queryPos != string::npos) {
                 size_t endPos = req.path.find('&', queryPos);
                 if (endPos == string::npos) endPos = req.path.size();
                 sessionId = req.path.substr(queryPos + 10, endPos - (queryPos + 10));
-            } else {
-                auto sessionIt = req.headers.find("Mcp-Session-Id");
-                if (sessionIt == req.headers.end()) sessionIt = req.headers.find("mcp-session-id");
-                if (sessionIt != req.headers.end()) sessionId = sessionIt->second;
             }
-
-            int sse_fd = -1;
-            {
-                lock_guard<mutex> lock(sessionMutex_);
-                if (activeSessions_.count(sessionId)) {
-                    sse_fd = activeSessions_[sessionId];
-                }
-            }
-
-            if (sse_fd == -1) {
-                res.statusCode = 400;
-                res.statusText = "Bad Request";
-                res.headers["Content-Type"] = "application/json";
-                res.body = makeError(request["id"], -32600, "Invalid or missing Mcp-Session-Id for SSE").dump();
-                return res;
-            }
-
-            json result = processJsonRpc(request);
-
-            // Send SSE Message
-            string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
-            send(sse_fd, sseMessage.c_str(), sseMessage.size(), 0);
-
-            // Respond 202 Accepted to the POST request
-            res.statusCode = 202;
-            res.statusText = "Accepted";
-            return res;
         }
 
-        // Responses from client — 202
-        res.statusCode = 202;
-        res.statusText = "Accepted";
+        // Proses JSON-RPC
+        json result = processJsonRpc(request);
+
+        // Kalau ada SSE session aktif, kirim lewat SSE dan balas 202
+        {
+            lock_guard<mutex> lock(sessionMutex_);
+            if (!sessionId.empty() && activeSessions_.count(sessionId)) {
+                int sse_fd = activeSessions_[sessionId];
+                string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
+                send(sse_fd, sseMessage.c_str(), sseMessage.size(), 0);
+                res.statusCode = 202;
+                res.statusText = "Accepted";
+                return res;
+            }
+        }
+
+        // ★ DEFAULT: Balas langsung dengan JSON di HTTP body (ini yang Claude web pakai)
+        res.statusCode = 200;
+        res.statusText = "OK";
+        res.headers["Content-Type"] = "application/json";
+
+        // Kalau ini initialize, buat session baru dan kirim header Mcp-Session-Id
+        if (method == "initialize") {
+            string newSessionId = generateSessionId();
+            // Simpan session dengan fd=-1 karena belum ada SSE stream
+            {
+                lock_guard<mutex> lock(sessionMutex_);
+                activeSessions_[newSessionId] = -1;
+            }
+            res.headers["Mcp-Session-Id"] = newSessionId;
+            cerr << "[MCP] New session created: " << newSessionId << endl;
+        }
+
+        res.body = result.dump();
         return res;
     }
 
     HttpResponse McpHandler::handleGet(const HttpRequest& req, int client_fd) {
+        // Cek apakah ini SSE request (Accept: text/event-stream)
+        auto acceptIt = req.headers.find("Accept");
+        if (acceptIt == req.headers.end()) acceptIt = req.headers.find("accept");
+
+        bool wantsSSE = (acceptIt != req.headers.end() &&
+                         acceptIt->second.find("text/event-stream") != string::npos);
+
+        if (!wantsSSE) {
+            HttpResponse res;
+            res.statusCode = 200;
+            res.statusText = "OK";
+            res.headers["Content-Type"] = "application/json";
+            res.body = "{\"status\":\"MCP server running\"}";
+            return res;
+        }
+
+        // Buat SSE stream
         string newSessionId = generateSessionId();
-        
         {
             lock_guard<mutex> lock(sessionMutex_);
             activeSessions_[newSessionId] = client_fd;
         }
 
-        cerr << "[MCP] New SSE stream opened, session ID: " << newSessionId << endl;
+        cerr << "[MCP] New SSE stream, session: " << newSessionId << endl;
 
         HttpResponse res;
         res.statusCode = 200;
@@ -176,7 +177,8 @@ namespace MCP {
         res.headers["Content-Type"] = "text/event-stream";
         res.headers["Cache-Control"] = "no-cache";
         res.headers["Connection"] = "keep-alive";
-        
+        res.headers["Mcp-Session-Id"] = newSessionId;
+
         string endpointEvent = "event: endpoint\ndata: /mcp?sessionId=" + newSessionId + "\n\n";
         res.body = endpointEvent;
         res.keepAlive = true;
@@ -235,7 +237,7 @@ namespace MCP {
         cerr << "[MCP] Initialize from client: " << clientName << endl;
 
         json result = {
-            {"protocolVersion", "2026-03-23"},
+            {"protocolVersion", "2024-11-05"},
             {"capabilities", {
                 {"tools", {
                     {"listChanged", false}
