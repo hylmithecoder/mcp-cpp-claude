@@ -88,23 +88,11 @@ cmake --build build --config Release
 
 ### Connect to Claude.ai
 
-Expose your local port via a tunnel, then add the URL in **Claude.ai → Settings → Integrations → Add MCP Server**.
+When you start the server, it will automatically generate a **Client ID** and **Client Secret** (or use existing ones from environment variables).
 
-**Option 1 — ngrok:**
-```bash
-ngrok http 5500
-# Copy https://xxxx.ngrok-free.app/mcp → paste to Claude.ai
-```
-
-**Option 2 — Cloudflare Tunnel:**
-```bash
-cloudflared tunnel --url http://localhost:5500
-```
-
-**Option 3 — Reverse SSH to VPS:**
-```bash
-ssh -R 5500:localhost:5500 user@your-vps-ip
-```
+1. Copy the credentials shown in your terminal.
+2. Expose your local port via a tunnel (SSH, ngrok, Cloudflare).
+3. Add the URL and credentials in **Claude.ai → Settings → Integrations → Add MCP Server**.
 
 ---
 
@@ -143,10 +131,10 @@ For now, use a private tunnel (SSH reverse forwarding to a VPS you control). Bea
 
 ## 🗺️ Roadmap
 
-- [x] **Bearer token auth** — protect `run_command` from unauthorized access
-- [x] **Streaming SSE output** — real-time stdout for long-running commands
+- [x] **Bearer token auth** — protected by auto-generated credentials
+- [ ] **Streaming SSE output** — real-time stdout for long-running commands
 - [x] **MCP Resources protocol** — `resources/list` + `resources/read`
-- [x] **Tool config file** — enable/disable tools without recompile
+- [x] **Zero Configuration** — auto-generated credentials on startup
 - [x] **Windows / macOS support** — cross-platform via raw sockets (macOS) / Winsock2 (Win)
 - [x] **Execution history** — SQLite logging of all tool calls
 

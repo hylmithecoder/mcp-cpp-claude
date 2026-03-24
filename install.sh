@@ -43,7 +43,7 @@ install_binary() {
         chmod +x "$BINARY_NAME"
         echo -e "${GREEN}✅ Download successful!${NC}"
         
-        read -p "Do you want to install '$BINARY_NAME' to /usr/local/bin? (y/N) " -n 1 -r
+        read -p "Do you want to install '$BINARY_NAME' to /usr/local/bin? (y/N) " -n 1 -r REPLY </dev/tty
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             if [ -w /usr/local/bin ]; then
@@ -91,7 +91,7 @@ build_from_source() {
     echo -e "${GREEN}✨ Build successful!${NC}"
     
     # Prompt for installation
-    read -p "Do you want to install '$BINARY_NAME' to /usr/local/bin? (y/N) " -n 1 -r
+    read -p "Do you want to install '$BINARY_NAME' to /usr/local/bin? (y/N) " -n 1 -r REPLY </dev/tty
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         if [ -w /usr/local/bin ]; then
