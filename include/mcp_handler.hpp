@@ -16,15 +16,13 @@ namespace MCP {
 
     class McpHandler {
     public:
-        // ✅ db_ dideklarasi duluan, jadi diinit duluan — aman untuk tools_(&db_)
         McpHandler() : db_("mcp_history.db"), tools_(&db_) {}
 
         void registerRoutes(Server& server);
 
     private:
-        // ⚠️ URUTAN INI PENTING — C++ init sesuai urutan deklarasi, bukan init list!
-        Tools::DataBase db_;   // ← HARUS duluan
-        SystemTools tools_;    // ← baru ini, karena butuh &db_
+        Tools::DataBase db_;
+        SystemTools tools_;
 
         // Session management
         map<string, int> activeSessions_;
