@@ -67,17 +67,25 @@ void Server::start() {
   // Allow port reuse
 #ifdef _WIN32
   // On Windows SO_REUSEADDR doesn't behave like Linux SO_REUSEPORT
-  // We use it but it's slightly different
   if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt,
                  sizeof(opt)) == SOCKET_ERROR) {
     cerr << "setsockopt failed: " << WSAGetLastError() << endl;
-#else
-  if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt,
-                 sizeof(opt)) == -1) {
-    perror("setsockopt failed");
-#endif
     exit(EXIT_FAILURE);
   }
+#else
+  if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) ==
+      -1) {
+    perror("setsockopt (SO_REUSEADDR) failed");
+    exit(EXIT_FAILURE);
+  }
+#ifdef SO_REUSEPORT
+  if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) ==
+      -1) {
+    // Some systems might not support SO_REUSEPORT, we can ignore or log it
+    // perror("setsockopt (SO_REUSEPORT) failed");
+  }
+#endif
+#endif
 
   address.sin_family = AF_INET;
   address.sin_addr.s_addr = INADDR_ANY;
