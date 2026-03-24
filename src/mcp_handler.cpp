@@ -1,8 +1,15 @@
-#include "../include/mcp_handler.hpp"
 #include <random>
 #include <sstream>
 #include <iomanip>
 #include <chrono>
+#include <iostream>
+#include <ctime>
+#include <algorithm>
+#include "../include/mcp_handler.hpp"
+#include "server.hpp"
+
+using namespace std;
+using json = nlohmann::json;
 
 namespace MCP {
 
@@ -38,9 +45,9 @@ namespace MCP {
     }
 
     void McpHandler::registerRoutes(Server& server) {
-        auto postHandler = [this](const HttpRequest& req, int client_fd) { return handlePost(req, client_fd); };
-        auto getHandler = [this](const HttpRequest& req, int client_fd) { return handleGet(req, client_fd); };
-        auto deleteHandler = [this](const HttpRequest& req, int client_fd) { return handleDelete(req, client_fd); };
+        auto postHandler = [this](const HttpRequest& req, socket_t client_fd) { return handlePost(req, client_fd); };
+        auto getHandler = [this](const HttpRequest& req, socket_t client_fd) { return handleGet(req, client_fd); };
+        auto deleteHandler = [this](const HttpRequest& req, socket_t client_fd) { return handleDelete(req, client_fd); };
 
         server.route("POST", "/mcp", postHandler);
         server.route("GET", "/mcp", getHandler);
@@ -50,9 +57,13 @@ namespace MCP {
         server.route("POST", "/", postHandler);
         server.route("GET", "/", getHandler);
         server.route("DELETE", "/", deleteHandler);
+
+        // OAuth2 routes for Claude Custom Connector
+        server.route("GET", "/authorize", [this](const HttpRequest& req, socket_t fd) { return handleAuthorize(req, fd); });
+        server.route("POST", "/token", [this](const HttpRequest& req, socket_t fd) { return handleToken(req, fd); });
     }
 
-    HttpResponse McpHandler::handlePost(const HttpRequest& req, int client_fd) {
+    HttpResponse McpHandler::handlePost(const HttpRequest& req, socket_t client_fd) {
         HttpResponse res;
 
         // Parse JSON-RPC body
@@ -115,7 +126,7 @@ namespace MCP {
         {
             lock_guard<mutex> lock(sessionMutex_);
             if (!sessionId.empty() && activeSessions_.count(sessionId)) {
-                int sse_fd = activeSessions_[sessionId];
+                socket_t sse_fd = activeSessions_[sessionId];
                 if (sse_fd != -1) {
                     cerr << "[MCP] Sending result via SSE (session: " << sessionId << ")" << endl;
                     string sseMessage = "event: message\ndata: " + result.dump() + "\n\n";
@@ -153,7 +164,7 @@ namespace MCP {
         return res;
     }
 
-    HttpResponse McpHandler::handleGet(const HttpRequest& req, int client_fd) {
+    HttpResponse McpHandler::handleGet(const HttpRequest& req, socket_t client_fd) {
         // Cek apakah ini SSE request (Accept: text/event-stream)
         auto acceptIt = req.headers.find("Accept");
         if (acceptIt == req.headers.end()) acceptIt = req.headers.find("accept");
@@ -194,7 +205,7 @@ namespace MCP {
         return res;
     }
 
-    HttpResponse McpHandler::handleDelete(const HttpRequest& req, int client_fd) {
+    HttpResponse McpHandler::handleDelete(const HttpRequest& req, socket_t client_fd) {
         HttpResponse res;
 
         string sessionId = "";
@@ -207,9 +218,10 @@ namespace MCP {
 
         lock_guard<mutex> lock(sessionMutex_);
         if (!sessionId.empty() && activeSessions_.count(sessionId)) {
-            close(activeSessions_[sessionId]); // Close the SSE socket
-            int fd = activeSessions_[sessionId];
-            if (fd != -1) close(fd);  // ← jangan close kalau fd=-1
+            socket_t fd = activeSessions_[sessionId];
+            if (fd != INVALID_SOCKET) {
+                CLOSE_SOCKET(fd); // Close the SSE socket
+            }
             activeSessions_.erase(sessionId);
             cerr << "[MCP] Session terminated: " << sessionId << endl;
             res.statusCode = 200;
@@ -326,6 +338,94 @@ namespace MCP {
                 {"message", message}
             }}
         };
+    }
+
+    HttpResponse McpHandler::handleAuthorize(const HttpRequest& req, socket_t client_fd) {
+        string path = req.path;
+        auto getParam = [&](string param) {
+            string search = param + "=";
+            size_t pos = path.find(search);
+            if (pos == string::npos) return string("");
+            size_t end = path.find('&', pos);
+            if (end == string::npos) end = path.size();
+            return path.substr(pos + search.size(), end - (pos + search.size()));
+        };
+
+        string clientId = getParam("client_id");
+        string redirectUri = getParam("redirect_uri");
+        string state = getParam("state");
+        
+        // Basic URL decode
+        string decodedUri;
+        for (size_t i = 0; i < redirectUri.size(); ++i) {
+            if (redirectUri[i] == '%' && i + 2 < redirectUri.size()) {
+                try {
+                    string hex = redirectUri.substr(i + 1, 2);
+                    decodedUri += (char)stoi(hex, nullptr, 16);
+                    i += 2;
+                } catch (...) { decodedUri += redirectUri[i]; }
+            } else decodedUri += redirectUri[i];
+        }
+
+        HttpResponse res;
+        if (apiClientId_.empty() || clientId == apiClientId_) {
+            string sep = (decodedUri.find('?') == string::npos) ? "?" : "&";
+            string location = decodedUri + sep + "code=mcp_auth_code_dummy";
+            if (!state.empty()) location += "&state=" + state;
+            
+            res.statusCode = 302;
+            res.statusText = "Found";
+            res.headers["Location"] = location;
+            cerr << "[OAuth] Authorization success, redirecting to: " << location << endl;
+        } else {
+            res.statusCode = 401;
+            res.statusText = "Unauthorized";
+            res.headers["Content-Type"] = "application/json";
+            res.body = "{\"error\":\"invalid_client\", \"message\":\"Invalid Client ID\"}";
+            cerr << "[OAuth] Authorization failed: Invalid Client ID (" << clientId << ")" << endl;
+        }
+        return res;
+    }
+
+    HttpResponse McpHandler::handleToken(const HttpRequest& req, socket_t client_fd) {
+        auto getBodyParam = [&](string param) {
+            string search = param + "=";
+            size_t pos = req.body.find(search);
+            if (pos == string::npos) return string("");
+            size_t end = req.body.find('&', pos);
+            if (end == string::npos) end = req.body.size();
+            return req.body.substr(pos + search.size(), end - (pos + search.size()));
+        };
+
+        string clientId = getBodyParam("client_id");
+        string clientSecret = getBodyParam("client_secret");
+        
+        if (clientId.empty() && !req.body.empty() && req.body[0] == '{') {
+            try {
+                auto j = json::parse(req.body);
+                clientId = j.value("client_id", "");
+                clientSecret = j.value("client_secret", "");
+            } catch(...) {}
+        }
+
+        HttpResponse res;
+        res.headers["Content-Type"] = "application/json";
+        
+        if ((apiClientId_.empty() || clientId == apiClientId_) && clientSecret == apiToken_) {
+            json body = {
+                {"access_token", apiToken_},
+                {"token_type", "Bearer"},
+                {"expires_in", 3600}
+            };
+            res.body = body.dump();
+            cerr << "[OAuth] Token issued for Client ID: " << clientId << endl;
+        } else {
+            res.statusCode = 401;
+            res.statusText = "Unauthorized";
+            res.body = "{\"error\":\"invalid_client\", \"message\":\"Invalid Client ID or Secret\"}";
+            cerr << "[OAuth] Token request failed for Client ID: " << clientId << endl;
+        }
+        return res;
     }
 
 } // namespace MCP

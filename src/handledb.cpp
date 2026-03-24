@@ -1,8 +1,13 @@
-#include "../include/handledb.hpp"
 #include <sqlite3.h>
 #include <string>
-using namespace Tools;
+#include <iostream>
+#include <vector>
+#include "../include/handledb.hpp"
 
+using namespace std;
+using json = nlohmann::json;
+
+namespace Tools {
 void DataBase::initDb(const char* dbPath){
     rc = sqlite3_open(dbPath, &db);
     if(rc != SQLITE_OK){
@@ -97,4 +102,6 @@ DataBase::~DataBase(){
     if(db){
         sqlite3_close(db);
     }
+}
+
 }

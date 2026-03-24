@@ -1,6 +1,16 @@
+#include <iostream>
+#include <sstream>
+#include <cstring>
+#include <mutex>
+#include <vector>
+#include <map>
+#include <functional>
+#include <thread>
 #include "../include/server.hpp"
 
-namespace MCP {
+using namespace std;
+
+using namespace MCP;
 
     // Build HTTP response string
     string HttpResponse::build() const {
@@ -17,10 +27,21 @@ namespace MCP {
         return oss.str();
     }
 
-    Server::Server(int port) : port_(port) {}
+    Server::Server(int port) : port_(port) {
+#ifdef _WIN32
+        WSADATA wsaData;
+        if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+            cerr << "WSAStartup failed" << endl;
+            exit(EXIT_FAILURE);
+        }
+#endif
+    }
 
     Server::~Server() {
         stop();
+#ifdef _WIN32
+        WSACleanup();
+#endif
     }
 
     void Server::route(const string& method, const string& path, RouteHandler handler) {
@@ -32,14 +53,25 @@ namespace MCP {
         int opt = 1;
 
         // Create socket
-        if ((server_fd_ = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+        if ((server_fd_ = socket(AF_INET, SOCK_STREAM, 0)) == INVALID_SOCKET) {
+#ifdef _WIN32
+            cerr << "socket failed: " << WSAGetLastError() << endl;
+#else
             perror("socket failed");
+#endif
             exit(EXIT_FAILURE);
         }
 
         // Allow port reuse
-        if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+#ifdef _WIN32
+        // On Windows SO_REUSEADDR doesn't behave like Linux SO_REUSEPORT
+        // We use it but it's slightly different
+        if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) == SOCKET_ERROR) {
+            cerr << "setsockopt failed: " << WSAGetLastError() << endl;
+#else
+        if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt)) == -1) {
             perror("setsockopt failed");
+#endif
             exit(EXIT_FAILURE);
         }
 
@@ -47,13 +79,21 @@ namespace MCP {
         address.sin_addr.s_addr = INADDR_ANY;
         address.sin_port = htons(port_);
 
-        if (bind(server_fd_, (struct sockaddr*)&address, sizeof(address)) < 0) {
+        if (bind(server_fd_, (struct sockaddr*)&address, sizeof(address)) == SOCKET_ERROR) {
+#ifdef _WIN32
+            cerr << "bind failed: " << WSAGetLastError() << endl;
+#else
             perror("bind failed");
+#endif
             exit(EXIT_FAILURE);
         }
 
-        if (listen(server_fd_, 10) < 0) {
+        if (listen(server_fd_, 10) == SOCKET_ERROR) {
+#ifdef _WIN32
+            cerr << "listen failed: " << WSAGetLastError() << endl;
+#else
             perror("listen failed");
+#endif
             exit(EXIT_FAILURE);
         }
 
@@ -63,11 +103,21 @@ namespace MCP {
 
         while (running_) {
             struct sockaddr_in client_addr;
+#ifdef _WIN32
+            int client_len = sizeof(client_addr);
+#else
             socklen_t client_len = sizeof(client_addr);
-            int client_fd = accept(server_fd_, (struct sockaddr*)&client_addr, &client_len);
+#endif
+            socket_t client_fd = accept(server_fd_, (struct sockaddr*)&client_addr, &client_len);
 
-            if (client_fd < 0) {
-                if (running_) perror("accept failed");
+            if (client_fd == INVALID_SOCKET) {
+                if (running_) {
+#ifdef _WIN32
+                    cerr << "accept failed: " << WSAGetLastError() << endl;
+#else
+                    perror("accept failed");
+#endif
+                }
                 continue;
             }
 
@@ -78,9 +128,9 @@ namespace MCP {
 
     void Server::stop() {
         running_ = false;
-        if (server_fd_ != -1) {
-            close(server_fd_);
-            server_fd_ = -1;
+        if (server_fd_ != INVALID_SOCKET) {
+            CLOSE_SOCKET(server_fd_);
+            server_fd_ = INVALID_SOCKET;
         }
     }
 
@@ -106,6 +156,10 @@ namespace MCP {
             if (colon != string::npos) {
                 string key = line.substr(0, colon);
                 string val = line.substr(colon + 1);
+                
+                // Lowercase key for easy lookup
+                for (auto& c : key) c = tolower(c);
+
                 // Trim leading spaces from value
                 size_t start = val.find_first_not_of(' ');
                 if (start != string::npos) val = val.substr(start);
@@ -128,7 +182,7 @@ namespace MCP {
         return req;
     }
 
-    void Server::handleClient(int client_fd) {
+    void Server::handleClient(socket_t client_fd) {
         char buffer[BUFFER_SIZE] = {0};
         string rawData;
 
@@ -138,8 +192,8 @@ namespace MCP {
 
         // First read
         bytes_read = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
-        if (bytes_read <= 0) {
-            close(client_fd);
+        if (bytes_read == SOCKET_ERROR || bytes_read == 0) {
+            CLOSE_SOCKET(client_fd);
             return;
         }
         buffer[bytes_read] = '\0';
@@ -164,9 +218,9 @@ namespace MCP {
 
                 // Read remaining body if needed
                 while ((int)bodyReceived < contentLength) {
-                    memset(buffer, 0, BUFFER_SIZE);
+                    std::memset(buffer, 0, BUFFER_SIZE);
                     bytes_read = recv(client_fd, buffer, BUFFER_SIZE - 1, 0);
-                    if (bytes_read <= 0) break;
+                    if (bytes_read == SOCKET_ERROR || bytes_read == 0) break;
                     rawData.append(buffer, bytes_read);
                     bodyReceived += bytes_read;
                 }
@@ -175,20 +229,76 @@ namespace MCP {
 
         HttpRequest req = parseRequest(rawData);
 
+        // Find route early to check for OAuth endpoints
+        string routePath = req.path;
+        size_t qmark = routePath.find('?');
+        if (qmark != string::npos) {
+            routePath = routePath.substr(0, qmark);
+        }
+
+        // Check Authentication if apiToken_ is set (but skip for OAuth flow)
+        bool isOAuthPath = (routePath == "/authorize" || routePath == "/token");
+        if (!apiToken_.empty() && !isOAuthPath) {
+            string authHeader = req.headers.count("authorization") ? req.headers.at("authorization") : "";
+            string xClientId = req.headers.count("x-client-id") ? req.headers.at("x-client-id") : "";
+            string xClientSecret = req.headers.count("x-client-secret") ? req.headers.at("x-client-secret") : "";
+            string xApiKey = req.headers.count("x-api-key") ? req.headers.at("x-api-key") : "";
+
+            bool authenticated = false;
+            
+            // 1. Extract Bearer token if present
+            string bearerToken;
+            if (authHeader.size() > 7 && (authHeader.substr(0, 7) == "Bearer " || authHeader.substr(0, 7) == "bearer ")) {
+                bearerToken = authHeader.substr(7);
+                bearerToken.erase(0, bearerToken.find_first_not_of(" \t\r\n"));
+                size_t last = bearerToken.find_last_not_of(" \t\r\n");
+                if (last != string::npos) bearerToken.erase(last + 1);
+                else bearerToken.clear();
+            }
+
+            // 2. Determine provided ID and Secret
+            string providedId = xClientId;
+            string providedSecret = !xClientSecret.empty() ? xClientSecret : (!bearerToken.empty() ? bearerToken : xApiKey);
+
+            // 3. Simple trimming and comparison
+            auto trim = [](string s) {
+                s.erase(0, s.find_first_not_of(" \t\r\n"));
+                size_t last = s.find_last_not_of(" \t\r\n");
+                if (last != string::npos) s.erase(last + 1);
+                else s.clear();
+                return s;
+            };
+
+            providedId = trim(providedId);
+            providedSecret = trim(providedSecret);
+
+            // Match logic:
+            // - Secret must match apiToken_
+            if (!apiToken_.empty() && providedSecret == apiToken_) {
+                authenticated = true;
+            }
+
+            if (!authenticated) {
+                HttpResponse res;
+                res.statusCode = 401;
+                res.statusText = "Unauthorized";
+                res.body = "{\"error\":\"Unauthorized: Invalid or missing Client ID / Client Secret\"}";
+                res.headers["Content-Type"] = "application/json";
+                addCorsHeaders(res);
+                string response = res.build();
+                send(client_fd, response.c_str(), response.size(), 0);
+                CLOSE_SOCKET(client_fd);
+                return;
+            }
+        }
+
         // Handle CORS preflight
         if (req.method == "OPTIONS") {
             HttpResponse res = handleCors(req);
             string response = res.build();
             send(client_fd, response.c_str(), response.size(), 0);
-            close(client_fd);
+            CLOSE_SOCKET(client_fd);
             return;
-        }
-
-        // Find route handler (strip query string for matching)
-        string routePath = req.path;
-        size_t qmark = routePath.find('?');
-        if (qmark != string::npos) {
-            routePath = routePath.substr(0, qmark);
         }
 
         HttpResponse res;
@@ -215,7 +325,7 @@ namespace MCP {
         send(client_fd, response.c_str(), response.size(), 0);
         
         if (!res.keepAlive) {
-            close(client_fd);
+            CLOSE_SOCKET(client_fd);
         }
     }
 
@@ -231,8 +341,6 @@ namespace MCP {
     void Server::addCorsHeaders(HttpResponse& res) {
         res.headers["Access-Control-Allow-Origin"] = "*";
         res.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
-        res.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Mcp-Session-Id, Last-Event-ID";
+        res.headers["Access-Control-Allow-Headers"] = "Content-Type, Accept, Authorization, Mcp-Session-Id, Last-Event-ID, X-Client-ID, X-Client-Secret, X-API-Key";
         res.headers["Access-Control-Expose-Headers"] = "Mcp-Session-Id";
     }
-
-} // namespace MCP

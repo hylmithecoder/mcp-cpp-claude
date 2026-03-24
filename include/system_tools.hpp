@@ -5,9 +5,6 @@
 #include <nlohmann/json.hpp>
 #include "handledb.hpp"
 
-using namespace std;
-using json = nlohmann::json;
-
 namespace MCP {
 
     class SystemTools {
@@ -15,30 +12,30 @@ namespace MCP {
         SystemTools(Tools::DataBase* db = nullptr) : db_(db) {}
 
         // Get definitions of all tools
-        json getToolDefinitions() const;
+        nlohmann::json getToolDefinitions() const;
 
         // Call a tool by name with arguments
-        json callTool(const string& name, const json& arguments);
+        nlohmann::json callTool(const std::string& name, const nlohmann::json& arguments);
 
     private:
         Tools::DataBase* db_;
         // Individual tool implementations
-        json listDirectory(const json& args);
-        json readFile(const json& args);
-        json searchFiles(const json& args);
-        json getFileInfo(const json& args);
-        json getSystemInfo(const json& args);
-        json listProcesses(const json& args);
-        json listInstalledApps(const json& args);
-        json runCommand(const json& args);
-        json getHistory(const json& args);
-        json getHistoryById(const json& args);
+        nlohmann::json listDirectory(const nlohmann::json& args);
+        nlohmann::json readFile(const nlohmann::json& args);
+        nlohmann::json searchFiles(const nlohmann::json& args);
+        nlohmann::json getFileInfo(const nlohmann::json& args);
+        nlohmann::json getSystemInfo(const nlohmann::json& args);
+        nlohmann::json listProcesses(const nlohmann::json& args);
+        nlohmann::json listInstalledApps(const nlohmann::json& args);
+        nlohmann::json runCommand(const nlohmann::json& args);
+        nlohmann::json getHistory(const nlohmann::json& args);
+        nlohmann::json getHistoryById(const nlohmann::json& args);
 
         // Utility: execute a shell command and capture output
-        string exec(const string& cmd);
+        std::string exec(const std::string& cmd);
 
         // Utility: make tool result content
-        json makeTextResult(const string& text, bool isError = false);
+        nlohmann::json makeTextResult(const std::string& text, bool isError = false);
     };
 
 } // namespace MCP

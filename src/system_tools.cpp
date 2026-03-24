@@ -1,14 +1,36 @@
-#include "../include/system_tools.hpp"
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <cstdio>
 #include <array>
 #include <ctime>
-#include <sys/stat.h>
-#include <pwd.h>
-#include <grp.h>
-#include <dirent.h>
+#include <algorithm>
+#include <iostream>
+#include <string>
+#include <vector>
+#include "../include/system_tools.hpp"
+
+#ifdef _WIN32
+    #include <windows.h>
+    #include <direct.h>
+    #ifdef __MINGW32__
+        #define POPEN popen
+        #define PCLOSE pclose
+    #else
+        #define POPEN _popen
+        #define PCLOSE _pclose
+    #endif
+#else
+    #include <sys/stat.h>
+    #include <pwd.h>
+    #include <grp.h>
+    #include <dirent.h>
+    #define POPEN popen
+    #define PCLOSE pclose
+#endif
+
+using namespace std;
+using json = nlohmann::json;
 
 namespace fs = filesystem;
 
@@ -17,7 +39,7 @@ namespace MCP {
     string SystemTools::exec(const string& cmd) {
         array<char, 4096> buffer;
         string result;
-        unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+        unique_ptr<FILE, decltype(&PCLOSE)> pipe(POPEN(cmd.c_str(), "r"), PCLOSE);
         if (!pipe) {
             return "Error: Failed to execute command";
         }
@@ -217,8 +239,14 @@ namespace MCP {
     json SystemTools::listDirectory(const json& args) {
         string path = args.value("path", "");
         if (path.empty()) {
+#ifdef _WIN32
+            const char* home = getenv("USERPROFILE");
+            if (!home) home = getenv("HOMEPATH");
+            path = home ? home : "C:\\Users";
+#else
             const char* home = getenv("HOME");
             path = home ? home : "/";
+#endif
         }
 
         try {
@@ -396,6 +424,17 @@ namespace MCP {
                 return makeTextResult("Error: Path does not exist: " + path, true);
             }
 
+#ifdef _WIN32
+            auto fsize = fs::file_size(path);
+            auto ftime = fs::last_write_time(path);
+            auto sctime = chrono::system_clock::to_time_t(chrono::file_clock::to_sys(ftime));
+            
+            ostringstream oss;
+            oss << "File Info: " << path << "\n\n";
+            oss << "Size:        " << fsize << " bytes\n";
+            oss << "Modified:    " << ctime(&sctime);
+            return makeTextResult(oss.str());
+#else
             struct stat st;
             if (stat(path.c_str(), &st) != 0) {
                 return makeTextResult("Error: Cannot stat file: " + path, true);
@@ -449,6 +488,7 @@ namespace MCP {
             oss << "Accessed:    " << timebuf << "\n";
 
             return makeTextResult(oss.str());
+#endif
 
         } catch (const exception& e) {
             return makeTextResult("Error: " + string(e.what()), true);
@@ -457,9 +497,14 @@ namespace MCP {
 
     json SystemTools::getSystemInfo(const json& args) {
         ostringstream oss;
-
         oss << "=== System Information ===\n\n";
 
+#ifdef _WIN32
+        oss << "OS:           " << exec("systeminfo | findstr /B /C:\"OS Name\"") << "\n";
+        oss << "Hostname:     " << exec("hostname") << "\n";
+        oss << "CPU:          " << exec("wmic cpu get name /value | findstr Name") << "\n";
+        oss << "Memory (Total):" << exec("systeminfo | findstr /C:\"Total Physical Memory\"") << "\n";
+#else
         // Hostname
         string hostname = exec("hostname 2>/dev/null");
         if (!hostname.empty() && hostname.back() == '\n') hostname.pop_back();
@@ -507,6 +552,7 @@ namespace MCP {
         string user = exec("whoami 2>/dev/null");
         if (!user.empty() && user.back() == '\n') user.pop_back();
         oss << "User:         " << user << "\n";
+#endif
 
         return makeTextResult(oss.str());
     }
@@ -515,6 +561,11 @@ namespace MCP {
         string sortBy = args.value("sort_by", "cpu");
         int limit = args.value("limit", 20);
 
+#ifdef _WIN32
+        string cmd = "tasklist /FO TABLE /NH";
+        string output = exec(cmd);
+        return makeTextResult("Running Processes (Windows tasklist):\n\n" + output);
+#else
         string sortFlag = "--sort=-%cpu";
         if (sortBy == "mem") sortFlag = "--sort=-%mem";
         else if (sortBy == "pid") sortFlag = "--sort=pid";
@@ -527,9 +578,13 @@ namespace MCP {
         }
 
         return makeTextResult("Running Processes (sorted by " + sortBy + ", top " + to_string(limit) + "):\n\n" + output);
+#endif
     }
 
     json SystemTools::listInstalledApps(const json& args) {
+#ifdef _WIN32
+        return makeTextResult("list_installed_apps is not yet supported on Windows", true);
+#else
         string search = args.value("search", "");
 
         ostringstream oss;
@@ -633,7 +688,10 @@ namespace MCP {
 
         oss << "\nTotal: " << count << " applications";
         return makeTextResult(oss.str());
+#endif
     }
+
+    const size_t MAX_OUTPUT_SIZE = 2048 * 1024; // 2 MB limit for command output
 
     json SystemTools::runCommand(const json& args) {
         string command = args.value("command", "");
@@ -643,14 +701,29 @@ namespace MCP {
             return makeTextResult("Error: 'command' is required", true);
         }
 
+        // Escape single quotes for bash -c: replace ' with '\''
+        string escaped = "";
+        for (char c : command) {
+            if (c == '\'') escaped += "'\\''";
+            else escaped += c;
+        }
+
         // Wrap with timeout
+#ifdef _WIN32
+        string cmd = "cmd /c \"" + command + "\" 2>&1";
+#else
         string cmd = "timeout " + to_string(timeout) + " bash -c " +
-                         "'" + command + "'" + " 2>&1";
+                    "'" + command + "'" + " 2>&1";
+#endif
 
         string output = exec(cmd);
 
         if (output.empty()) {
             output = "(command produced no output)";
+        } else if (output.size() > MAX_OUTPUT_SIZE) {
+            output = output.substr(0, MAX_OUTPUT_SIZE);
+            output += "\n\n[Warning: Output truncated. The result was too large (" + 
+                      to_string(output.size() / 1024) + " KB).]";
         }
 
         return makeTextResult("$ " + command + "\n\n" + output);

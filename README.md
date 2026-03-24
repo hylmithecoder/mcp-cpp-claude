@@ -127,10 +127,10 @@ For now, use a private tunnel (SSH reverse forwarding to a VPS you control). Bea
 
 ## 🗺️ Roadmap
 
-- [ ] **Bearer token auth** — protect `run_command` from unauthorized access
+- [x] **Bearer token auth** — protect `run_command` from unauthorized access
 - [ ] **Streaming SSE output** — real-time stdout for long-running commands
-- [ ] **MCP Resources protocol** — `resources/list` + `resources/read`
-- [ ] **Tool config file** — enable/disable tools without recompile
+- [x] **MCP Resources protocol** — `resources/list` + `resources/read`
+- [x] **Tool config file** — enable/disable tools without recompile
 - [ ] **Windows / macOS support** — cross-platform via ASIO or libuv
 - [x] **Execution history** — SQLite logging of all tool calls
 

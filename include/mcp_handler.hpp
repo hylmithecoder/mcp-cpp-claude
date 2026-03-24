@@ -8,10 +8,6 @@
 #include "system_tools.hpp"
 #include "handledb.hpp"
 
-using namespace std;
-using namespace Tools;
-using json = nlohmann::json;
-
 namespace MCP {
 
     class McpHandler {
@@ -19,30 +15,38 @@ namespace MCP {
         McpHandler() : db_("mcp_history.db"), tools_(&db_) {}
 
         void registerRoutes(Server& server);
+        void setCredentials(const std::string& id, const std::string& secret) {
+            apiClientId_ = id;
+            apiToken_ = secret;
+        }
 
     private:
         Tools::DataBase db_;
         SystemTools tools_;
+        std::string apiClientId_;
+        std::string apiToken_;
 
         // Session management
-        map<string, int> activeSessions_;
-        mutex sessionMutex_;
+        std::map<std::string, socket_t> activeSessions_;
+        std::mutex sessionMutex_;
 
-        string generateSessionId();
+        std::string generateSessionId();
 
-        HttpResponse handlePost(const HttpRequest& req, int client_fd);
-        HttpResponse handleGet(const HttpRequest& req, int client_fd);
-        HttpResponse handleDelete(const HttpRequest& req, int client_fd);
+        HttpResponse handlePost(const HttpRequest& req, socket_t client_fd);
+        HttpResponse handleGet(const HttpRequest& req, socket_t client_fd);
+        HttpResponse handleDelete(const HttpRequest& req, socket_t client_fd);
+        HttpResponse handleAuthorize(const HttpRequest& req, socket_t client_fd);
+        HttpResponse handleToken(const HttpRequest& req, socket_t client_fd);
 
-        json processJsonRpc(const json& request);
+        nlohmann::json processJsonRpc(const nlohmann::json& request);
 
-        json handleInitialize(const json& params, const json& id);
-        json handleToolsList(const json& id);
-        json handleToolsCall(const json& params, const json& id);
-        json handlePing(const json& id);
+        nlohmann::json handleInitialize(const nlohmann::json& params, const nlohmann::json& id);
+        nlohmann::json handleToolsList(const nlohmann::json& id);
+        nlohmann::json handleToolsCall(const nlohmann::json& params, const nlohmann::json& id);
+        nlohmann::json handlePing(const nlohmann::json& id);
 
-        json makeResponse(const json& id, const json& result);
-        json makeError(const json& id, int code, const string& message);
+        nlohmann::json makeResponse(const nlohmann::json& id, const nlohmann::json& result);
+        nlohmann::json makeError(const nlohmann::json& id, int code, const std::string& message);
     };
 
 } // namespace MCP
