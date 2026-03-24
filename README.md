@@ -5,7 +5,7 @@
 **Give Claude direct access to your Linux machine — no Python, no Node.js, no runtime overhead.**
 
 [![Language](https://img.shields.io/badge/language-C%2B%2B20-blue?logo=cplusplus)](https://isocpp.org/)
-[![Platform](https://img.shields.io/badge/platform-Linux-orange?logo=linux)](https://kernel.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-orange?logo=linux&logoColor=white)](https://kernel.org/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Protocol](https://img.shields.io/badge/MCP-Streamable%20HTTP-purple)](https://modelcontextprotocol.io)
 [![Transport](https://img.shields.io/badge/transport-JSON--RPC%202.0-yellow)](https://www.jsonrpc.org/)
@@ -18,7 +18,7 @@
 
 ## ✨ What is this?
 
-A **Model Context Protocol (MCP) server** written in native C++ that lets AI assistants like **Claude** interact directly with your local Linux system. No Python interpreter, no Node.js runtime — just a lean compiled binary that wakes up in milliseconds.
+A **Model Context Protocol (MCP) server** written in native C++ that lets AI assistants like **Claude** interact directly with your local system (**Linux, macOS, or Windows**). No Python interpreter, no Node.js runtime — just a lean compiled binary that wakes up in milliseconds.
 
 Connect it to Claude.ai via a tunnel (SSH, ngrok, Cloudflare) and Claude can:
 - 📁 Browse your filesystem
@@ -53,21 +53,37 @@ Connect it to Claude.ai via a tunnel (SSH, ngrok, Cloudflare) and Claude can:
 ## ⚡ Quick Start
 
 ### Prerequisites
-- GCC / G++ with C++20 support
+- GCC / G++ with C++20 support (or MSVC on Windows)
 - CMake >= 3.14
-- SQLite3: `sudo apt install libsqlite3-dev`
+- SQLite3: 
+  - Linux: `sudo apt install libsqlite3-dev`
+  - macOS: `brew install sqlite3`
+  - Windows: Handled automatically via CMake/FetchContent
 
 ### Build & Run
 
+**One-liner (Linux & macOS):**
+This will download the pre-built binary for your architecture and install it.
+```bash
+curl -sSL https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/install.sh | bash
+```
+
+**Windows:**
+Download the `mcp.exe` from the [Latest Release](https://github.com/hylmithecoder/mcp-cpp-claude/releases/latest) and run it from your terminal.
+
+**Using git clone (Linux/macOS):**
 ```bash
 git clone https://github.com/hylmithecoder/mcp-cpp-claude.git
 cd mcp-cpp-claude
+./install.sh
+```
 
-cmake -B build
-cmake --build build
-
+**Manual Build:**
+If you prefer to build from source:
+```bash
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --config Release
 ./build/mcp
-# 🚀 MCP Server listening on http://0.0.0.0:5500/mcp
 ```
 
 ### Connect to Claude.ai
@@ -128,10 +144,10 @@ For now, use a private tunnel (SSH reverse forwarding to a VPS you control). Bea
 ## 🗺️ Roadmap
 
 - [x] **Bearer token auth** — protect `run_command` from unauthorized access
-- [ ] **Streaming SSE output** — real-time stdout for long-running commands
+- [x] **Streaming SSE output** — real-time stdout for long-running commands
 - [x] **MCP Resources protocol** — `resources/list` + `resources/read`
 - [x] **Tool config file** — enable/disable tools without recompile
-- [ ] **Windows / macOS support** — cross-platform via ASIO or libuv
+- [x] **Windows / macOS support** — cross-platform via raw sockets (macOS) / Winsock2 (Win)
 - [x] **Execution history** — SQLite logging of all tool calls
 
 ---
