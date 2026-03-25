@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.14)
-set(CMAKE_CXX_STANDARD 20)
+if(NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(mcp VERSION 2026.1)
@@ -15,6 +17,14 @@ add_subdirectory(src)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 include(FetchContent)
+
+# ghc::filesystem (for Android compatibility with old NDKs)
+if(ANDROID)
+    FetchContent_Declare(ghc_filesystem
+        GIT_REPOSITORY https://github.com/gulrak/filesystem.git
+        GIT_TAG v1.5.14)
+    FetchContent_MakeAvailable(ghc_filesystem)
+endif()
 
 # nlohmann_json
 if(NOT CMAKE_CROSSCOMPILING)
@@ -53,6 +63,8 @@ endif()
 if(WIN32)
     target_link_libraries(mcp PRIVATE ws2_32)
     target_compile_definitions(mcp PRIVATE _HAS_STD_BYTE=0)
+elseif(ANDROID)
+    target_link_libraries(mcp PRIVATE log ghc_filesystem)
 else()
     target_link_libraries(mcp PRIVATE pthread)
 endif()

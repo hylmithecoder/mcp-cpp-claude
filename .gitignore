@@ -2,7 +2,9 @@
 build/
 build_release/
 build_win/
+build_android/
 release_win.sh
 release.sh
+release_android.sh
 .env
 .DS_Store

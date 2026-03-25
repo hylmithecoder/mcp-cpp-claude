@@ -1,4 +1,8 @@
-#include <filesystem>
+#ifdef ANDROID
+    #include <ghc/filesystem.hpp>
+#else
+    #include <filesystem>
+#endif
 #include <fstream>
 #include <sstream>
 #include <cstdio>
@@ -32,7 +36,11 @@
 using namespace std;
 using json = nlohmann::json;
 
-namespace fs = filesystem;
+#ifdef ANDROID
+    namespace fs = ghc::filesystem;
+#else
+    namespace fs = std::filesystem;
+#endif
 
 namespace MCP {
 
