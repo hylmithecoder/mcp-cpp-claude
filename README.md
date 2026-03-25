@@ -73,11 +73,6 @@ curl -sSL https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/
 irm https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/install.ps1 | iex
 ```
 
-**Android (Build only):**
-```bash
-./release_android.sh
-```
-
 **Using git clone (Linux/macOS):**
 ```bash
 git clone https://github.com/hylmithecoder/mcp-cpp-claude.git
