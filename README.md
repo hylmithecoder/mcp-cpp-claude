@@ -62,15 +62,20 @@ Connect it to Claude.ai via a tunnel (SSH, ngrok, Cloudflare) and Claude can:
 
 ### Build & Run
 
-**One-liner (Linux & macOS):**
+**One-liner (Linux, macOS, & Android (Termux)):**
 This will download the pre-built binary for your architecture and install it.
 ```bash
 curl -sSL https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/install.sh | bash
 ```
 
-**Windows:**
+**Windows (PowerShell):**
 ```powershell
-curl -sSL https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/install.ps1 | powershell
+irm https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/install.ps1 | iex
+```
+
+**Android (Build only):**
+```bash
+./release_android.sh
 ```
 
 **Using git clone (Linux/macOS):**
