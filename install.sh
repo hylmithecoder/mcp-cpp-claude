@@ -23,6 +23,12 @@ echo -e "${BLUE}---------------------------------------${NC}"
 # Detect OS and Architecture
 OS="$(uname -s)"
 ARCH="$(uname -m)"
+IS_ANDROID=false
+
+if [[ "$OS" == "Linux" ]] && [[ "$(uname -o 2>/dev/null)" == "Android" ]]; then
+    IS_ANDROID=true
+    echo -e "${YELLOW}📱 Android (Termux) detected.${NC}"
+fi
 
 BINARY_NAME="mcp"
 DOWNLOAD_URL=""
@@ -33,24 +39,39 @@ if [[ "$OS" == "Darwin" ]]; then
     else
         DOWNLOAD_URL="$BASE_URL/mcp-mac-x86_64"
     fi
+elif [[ "$IS_ANDROID" == true ]]; then
+    if [[ "$ARCH" == "aarch64" ]]; then
+        DOWNLOAD_URL="$BASE_URL/mcp-android-arm64-v8a"
+    elif [[ "$ARCH" == "armv7l" || "$ARCH" == "armv8l" ]]; then
+        DOWNLOAD_URL="$BASE_URL/mcp-android-armeabi-v7a"
+    fi
 elif [[ "$OS" == "Linux" ]]; then
-    DOWNLOAD_URL="$BASE_URL/mcp"
+    DOWNLOAD_URL="$BASE_URL/mcp-linux-x86_64"
 fi
 
 install_binary() {
+    if [[ -z "$DOWNLOAD_URL" ]]; then
+        return 1
+    fi
+
     echo -e "${YELLOW}🚀 Downloading pre-built binary for $OS ($ARCH)...${NC}"
     if curl -L --progress-bar "$DOWNLOAD_URL" -o "$BINARY_NAME"; then
         chmod +x "$BINARY_NAME"
         echo -e "${GREEN}✅ Download successful!${NC}"
         
-        read -p "Do you want to install '$BINARY_NAME' to /usr/local/bin? (y/N) " -n 1 -r REPLY </dev/tty
+        INSTALL_PATH="/usr/local/bin"
+        if [[ "$IS_ANDROID" == true ]]; then
+            INSTALL_PATH="$PREFIX/bin"
+        fi
+
+        read -p "Do you want to install '$BINARY_NAME' to $INSTALL_PATH? (y/N) " -n 1 -r REPLY </dev/tty
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            if [ -w /usr/local/bin ]; then
-                cp "$BINARY_NAME" /usr/local/bin/mcp
+            if [ -w "$INSTALL_PATH" ]; then
+                cp "$BINARY_NAME" "$INSTALL_PATH/mcp"
             else
-                echo -e "Requires sudo to copy to /usr/local/bin"
-                sudo cp "$BINARY_NAME" /usr/local/bin/mcp
+                echo -e "Requires sudo to copy to $INSTALL_PATH"
+                sudo cp "$BINARY_NAME" "$INSTALL_PATH/mcp"
             fi
             echo -e "${GREEN}✅ Installed! You can now run 'mcp' from anywhere.${NC}"
         else
@@ -64,54 +85,54 @@ install_binary() {
 }
 
 build_from_source() {
-    echo -e "${YELLOW}🛠️ Falling back to building from source...${NC}"
+    echo -e "${YELLOW}🛠️ Building from source...${NC}"
     
-    # Check if we are in the source directory
-    if [[ ! -f "CMakeLists.txt" ]]; then
-        echo -e "${YELLOW}📂 Cloning repository to temporary directory...${NC}"
-        TEMP_DIR="$(mktemp -d)"
-        git clone "https://github.com/$REPO.git" "$TEMP_DIR"
-        cd "$TEMP_DIR"
-    fi
-
     # Check for dependencies
-    if ! command -v cmake &> /dev/null || ! command -v g++ &> /dev/null; then
-        echo -e "${RED}❌ cmake or g++ not found. Please install them and try again.${NC}"
+    if ! command -v cmake &> /dev/null; then
+        echo -e "${RED}❌ cmake not found. Please install it (e.g., sudo apt install cmake).${NC}"
         exit 1
     fi
 
     mkdir -p build && cd build
-    if [[ "$OS" == "Darwin" ]]; then
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES="$ARCH" ..
-    else
-        cmake -DCMAKE_BUILD_TYPE=Release ..
+    echo -e "${YELLOW}⚙️ Configuring with CMake...${NC}"
+    
+    CMAKE_FLAGS="-DCMAKE_BUILD_TYPE=Release"
+    if [[ "$IS_ANDROID" == true ]]; then
+        # For Termux native build, we don't need a cross-toolchain
+        CMAKE_FLAGS="$CMAKE_FLAGS"
+    elif [[ "$OS" == "Darwin" ]]; then
+        CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_OSX_ARCHITECTURES=$ARCH"
     fi
-    cmake --build . --config Release --parallel $(sysctl -n hw.ncpu 2>/dev/null || nproc 2>/dev/null || echo 2)
+
+    if ! cmake $CMAKE_FLAGS ..; then
+        echo -e "${RED}❌ CMake configuration failed.${NC}"
+        exit 1
+    fi
+
+    echo -e "${YELLOW}🔨 Compiling...${NC}"
+    if ! cmake --build . --parallel $(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 2); then
+        echo -e "${RED}❌ Compilation failed.${NC}"
+        exit 1
+    fi
     
     echo -e "${GREEN}✨ Build successful!${NC}"
     
-    # Prompt for installation
-    read -p "Do you want to install '$BINARY_NAME' to /usr/local/bin? (y/N) " -n 1 -r REPLY </dev/tty
+    INSTALL_PATH="/usr/local/bin"
+    if [[ "$IS_ANDROID" == true ]]; then
+        INSTALL_PATH="$PREFIX/bin"
+    fi
+
+    read -p "Do you want to install '$BINARY_NAME' to $INSTALL_PATH? (y/N) " -n 1 -r REPLY </dev/tty
     echo
     if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if [ -w /usr/local/bin ]; then
-            cp "$BINARY_NAME" /usr/local/bin/mcp
+        if [ -w "$INSTALL_PATH" ]; then
+            cp "$BINARY_NAME" "$INSTALL_PATH/mcp"
         else
-            echo -e "Requires sudo to copy to /usr/local/bin"
-            sudo cp "$BINARY_NAME" /usr/local/bin/mcp
+            sudo cp "$BINARY_NAME" "$INSTALL_PATH/mcp"
         fi
         echo -e "${GREEN}✅ Installed! You can now run 'mcp' from anywhere.${NC}"
     else
         echo -e "Binary is available at: ${BLUE}$(pwd)/$BINARY_NAME${NC}"
-    fi
-
-    # Cleanup if we cloned
-    if [[ -n "$TEMP_DIR" ]]; then
-        echo -e "${YELLOW}🧹 Cleaning up temporary files...${NC}"
-        # We don't remove if they chose not to install, because they need the binary
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            rm -rf "$TEMP_DIR"
-        fi
     fi
 }
 

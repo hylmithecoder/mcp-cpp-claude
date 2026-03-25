@@ -69,7 +69,9 @@ curl -sSL https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/
 ```
 
 **Windows:**
-Download the `mcp.exe` from the [Latest Release](https://github.com/hylmithecoder/mcp-cpp-claude/releases/latest) and run it from your terminal.
+```powershell
+curl -sSL https://raw.githubusercontent.com/hylmithecoder/mcp-cpp-claude/master/install.ps1 | powershell
+```
 
 **Using git clone (Linux/macOS):**
 ```bash
