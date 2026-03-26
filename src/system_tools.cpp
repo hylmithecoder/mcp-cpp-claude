@@ -68,27 +68,6 @@ namespace MCP {
 
     json SystemTools::getToolDefinitions() const {
         return json::array({
-            {
-                {"name", "get_history"},
-                {"description", "Get the list of recently executed tool calls (summary)"},
-                {"inputSchema", {
-                    {"type", "object"},
-                    {"properties", {
-                        {"limit", {{"type", "integer"}, {"description", "Number of records to fetch (default: 10)"}}} 
-                    }}
-                }}
-            },
-            {
-                {"name", "get_history_by_id"},
-                {"description", "Get detailed history including full result by session/title ID"},
-                {"inputSchema", {
-                    {"type", "object"},
-                    {"properties", {
-                        {"id", {{"type", "integer"}, {"description", "The ID of the history entry"}}}
-                    }},
-                    {"required", {"id"}}
-                }}
-            },
             // 1. list_directory
             {
                 {"name", "list_directory"},
@@ -225,6 +204,93 @@ namespace MCP {
                     }},
                     {"required", json::array({"command"})}
                 }}
+            },
+            // 9. get_history
+            {
+                {"name", "get_history"},
+                {"description", "Get the list of recently executed tool calls (summary)"},
+                {"inputSchema", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"limit", {{"type", "integer"}, {"description", "Number of records to fetch (default: 10)"}}} 
+                    }}
+                }}
+            },
+            // 10. get_history_by_id
+            {
+                {"name", "get_history_by_id"},
+                {"description", "Get detailed history including full result by session/title ID"},
+                {"inputSchema", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"id", {{"type", "integer"}, {"description", "The ID of the history entry"}}}
+                    }},
+                    {"required", {"id"}}
+                }}
+            },
+            // 11. Editor (multi-command)
+            {
+                {"name", "editor"},
+                {"description", "Powerful file editor with multiple operations. Commands: "
+                    "'create' - Create new file (args: path, content, overwrite). "
+                    "'write' - Write entire file content, always overwrites (args: path, content). "
+                    "'append' - Append content to end of file (args: path, content). "
+                    "'insert' - Insert content at specific line number (args: path, line, content). "
+                    "'replace' - Search and replace text in file (args: path, search, replacement, all). "
+                    "'replace_lines' - Replace a range of lines (args: path, start_line, end_line, content). "
+                    "'delete_lines' - Delete a range of lines (args: path, start_line, end_line). "
+                    "'undo' - Undo last change from backup (args: path). "
+                    "'diff' - Show differences between backup and current file (args: path). "
+                    "'read' - Read file content (args: path, start_line, end_line). "
+                    "All write operations use atomic writes (temp file + rename) to prevent corruption. "
+                    "A backup (.mcp_bak) is created before every modification for undo support."},
+                {"inputSchema", {
+                    {"type", "object"},
+                    {"properties", {
+                        {"command", {
+                            {"type", "string"},
+                            {"description", "The editor command to execute"},
+                            {"enum", json::array({"create", "write", "append", "insert", "replace", "replace_lines", "delete_lines", "undo", "diff", "read"})}
+                        }},
+                        {"path", {
+                            {"type", "string"},
+                            {"description", "Absolute path to the file"}
+                        }},
+                        {"content", {
+                            {"type", "string"},
+                            {"description", "File content for create/write/append/insert/replace_lines"}
+                        }},
+                        {"line", {
+                            {"type", "integer"},
+                            {"description", "Line number for insert (1-indexed)"}
+                        }},
+                        {"start_line", {
+                            {"type", "integer"},
+                            {"description", "Start line for replace_lines/delete_lines/read (1-indexed)"}
+                        }},
+                        {"end_line", {
+                            {"type", "integer"},
+                            {"description", "End line for replace_lines/delete_lines/read (1-indexed, inclusive)"}
+                        }},
+                        {"search", {
+                            {"type", "string"},
+                            {"description", "Text to search for (replace command)"}
+                        }},
+                        {"replacement", {
+                            {"type", "string"},
+                            {"description", "Replacement text (replace command)"}
+                        }},
+                        {"all", {
+                            {"type", "boolean"},
+                            {"description", "Replace all occurrences (replace command, default: false)"}
+                        }},
+                        {"overwrite", {
+                            {"type", "boolean"},
+                            {"description", "Overwrite existing file (create command, default: false)"}
+                        }}
+                    }},
+                    {"required", json::array({"command", "path"})}
+                }}
             }
         });
     }
@@ -238,6 +304,9 @@ namespace MCP {
         if (name == "list_processes") return listProcesses(arguments);
         if (name == "list_installed_apps") return listInstalledApps(arguments);
         if (name == "run_command") return runCommand(arguments);
+        if (name == "editor") return editor(arguments);
+        if (name == "get_history") return getHistory(arguments);
+        if (name == "get_history_by_id") return getHistoryById(arguments);
 
         return makeTextResult("Unknown tool: " + name, true);
     }
@@ -735,6 +804,52 @@ namespace MCP {
         }
 
         return makeTextResult("$ " + command + "\n\n" + output);
+    }
+
+    json SystemTools::getHistory(const json& args) {
+        if (!db_ || !db_->db) {
+            return makeTextResult("Error: Database not available", true);
+        }
+        int limit = args.value("limit", 10);
+
+        sqlite3_stmt* stmt;
+        string sql = "SELECT id, mainContext, timestamp FROM history_title ORDER BY id DESC LIMIT ?";
+        int rc = sqlite3_prepare_v2(db_->db, sql.c_str(), -1, &stmt, nullptr);
+        if (rc != SQLITE_OK) {
+            return makeTextResult("Error: Failed to query history", true);
+        }
+        sqlite3_bind_int(stmt, 1, limit);
+
+        ostringstream oss;
+        oss << "=== Recent Tool History ===\n\n";
+        int count = 0;
+        while (sqlite3_step(stmt) == SQLITE_ROW) {
+            int id = sqlite3_column_int(stmt, 0);
+            const char* ctx = (const char*)sqlite3_column_text(stmt, 1);
+            const char* ts = (const char*)sqlite3_column_text(stmt, 2);
+            oss << "[" << id << "] " << (ctx ? ctx : "?") << " (" << (ts ? ts : "?") << ")\n";
+            count++;
+        }
+        sqlite3_finalize(stmt);
+
+        if (count == 0) {
+            oss << "No history records found.";
+        } else {
+            oss << "\nTotal: " << count << " record(s)";
+        }
+        return makeTextResult(oss.str());
+    }
+
+    json SystemTools::getHistoryById(const json& args) {
+        if (!db_ || !db_->db) {
+            return makeTextResult("Error: Database not available", true);
+        }
+        int id = args.value("id", 0);
+        if (id <= 0) {
+            return makeTextResult("Error: 'id' is required and must be > 0", true);
+        }
+        string result = db_->readTheContext(db_->db, id);
+        return makeTextResult(result);
     }
 
 } // namespace MCP

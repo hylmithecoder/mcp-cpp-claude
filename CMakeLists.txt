@@ -4,7 +4,7 @@ if(NOT CMAKE_CXX_STANDARD)
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-project(mcp VERSION 2026.1)
+project(mcp VERSION 2026.0.2)
 
 # Prevent leakage of host headers (/usr/include) during cross-compilation
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)

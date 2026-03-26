@@ -30,6 +30,7 @@ namespace MCP {
         nlohmann::json runCommand(const nlohmann::json& args);
         nlohmann::json getHistory(const nlohmann::json& args);
         nlohmann::json getHistoryById(const nlohmann::json& args);
+        nlohmann::json editor(const nlohmann::json& args);
 
         // Utility: execute a shell command and capture output
         std::string exec(const std::string& cmd);
