@@ -5,7 +5,9 @@
 **Give Claude direct access to your Linux machine — no Python, no Node.js, no runtime overhead.**
 
 [![Language](https://img.shields.io/badge/language-C%2B%2B20-blue?logo=cplusplus)](https://isocpp.org/)
-[![Platform](https://img.shields.io/badge/platform-Linux%20|%20macOS%20|%20Windows-orange?logo=linux&logoColor=white)](https://kernel.org/)
+![Linux](https://img.shields.io/badge/platform-Linux-orange?logo=linux&logoColor=white)
+![macOS](https://img.shields.io/badge/platform-macOS-green?logo=apple&logoColor=white)
+![Windows](https://img.shields.io/badge/platform-windows-blue?logo=windows&logoColor=white)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Protocol](https://img.shields.io/badge/MCP-Streamable%20HTTP-purple)](https://modelcontextprotocol.io)
 [![Transport](https://img.shields.io/badge/transport-JSON--RPC%202.0-yellow)](https://www.jsonrpc.org/)
