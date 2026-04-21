@@ -1,4 +1,6 @@
 #include "../include/mcp_handler.hpp"
+#include "../include/utils.hpp"
+#include "server.hpp"
 #include <chrono>
 #include <iostream>
 #include <random>
@@ -35,19 +37,51 @@ void signalHandler(int signum) {
   exit(0);
 }
 
-int main() {
+void handleArguments(int argc, char *argv[], MCP::Utils utilClass = MCP::Utils()) {
+  for (int i = 1; i < argc; ++i) {
+    string arg = argv[i];
+    if (arg == "-v" || arg == "--version") {
+      utilClass.printVersion();
+      exit(0);
+    }
+    if (arg == "-h" || arg == "--help") {
+      utilClass.printHelp();
+      exit(0);
+    }
+    if (arg == "-p" || arg == "--port") {
+      if (i + 1 < argc) {
+        // MCP::PORT = stoi(argv[++i]);
+      } else {
+        cerr << "Error: Missing port number" << endl;
+        exit(1);
+      }
+    }
+    if (arg == "-t" || arg == "--token") {
+      if (i + 1 < argc) {
+        setenv("MCP_TOKEN", argv[++i], 1);
+      } else {
+        cerr << "Error: Missing token" << endl;
+        exit(1);
+      }
+    }
+    if (arg == "-c" || arg == "--client") {
+      if (i + 1 < argc) {
+        setenv("MCP_CLIENT_ID", argv[++i], 1);
+      } else {
+        cerr << "Error: Missing client ID" << endl;
+        exit(1);
+      }
+    }
+  }
+}
+
+int main(int argc, char *argv[]) {
   // Handle Ctrl+C gracefully
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
 
-  std::cout << R"(
-  ╔══════════════════════════════════════╗
-  ║     MCP Server (Streamable HTTP)     ║
-  ║     Local System Access for Claude   ║
-  ╚══════════════════════════════════════╝
-)" << std::endl;
-
   // Create server and MCP handler
+  handleArguments(argc, argv);
   MCP::Server server(MCP::PORT);
   g_server = &server;
 
@@ -72,6 +106,13 @@ int main() {
 
   server.setCredentials(clientId, apiSecret);
 
+  std::cout << R"(
+  ╔══════════════════════════════════════╗
+  ║     MCP Server (Streamable HTTP)     ║
+  ║     Local System Access for Claude   ║
+  ╚══════════════════════════════════════╝
+  )" << std::endl;
+
   std::cout << "🚀 MCP Server starting..." << std::endl;
   std::cout << "---------------------------------------" << std::endl;
   std::cout << "🔑 CONNECTION CREDENTIALS" << std::endl;
@@ -80,9 +121,6 @@ int main() {
   if (generated) {
     std::cout << "   (Generated automatically for this session)" << std::endl;
   }
-  std::cout << "---------------------------------------" << std::endl;
-  std::cout << "👉 Use these in Claude.ai MCP configuration." << std::endl;
-  std::cout << "---------------------------------------" << std::endl;
 
   MCP::McpHandler handler;
   handler.setCredentials(clientId, apiSecret);

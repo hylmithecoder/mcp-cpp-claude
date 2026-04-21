@@ -9,5 +9,9 @@ set(SOURCE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/editorTools.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../include/handledb.hpp
     ${CMAKE_CURRENT_LIST_DIR}/handledb.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../include/utils.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/utils.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/../include/cache_manager.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/../include/cache_path.hpp
     PARENT_SCOPE
 )

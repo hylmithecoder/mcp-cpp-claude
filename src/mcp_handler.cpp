@@ -61,6 +61,9 @@ namespace MCP {
         // OAuth2 routes for Claude Custom Connector
         server.route("GET", "/authorize", [this](const HttpRequest& req, socket_t fd) { return handleAuthorize(req, fd); });
         server.route("POST", "/token", [this](const HttpRequest& req, socket_t fd) { return handleToken(req, fd); });
+        
+        // Discovery for ChatGPT and other MCP clients
+        server.route("GET", "/.well-known/oauth-protected-resource", [this](const HttpRequest& req, socket_t fd) { return handleDiscovery(req, fd); });
     }
 
     HttpResponse McpHandler::handlePost(const HttpRequest& req, socket_t client_fd) {
@@ -101,7 +104,8 @@ namespace MCP {
         }
 
         string method = request.value("method", "");
-        cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ")" << endl;
+        string userAgent = req.headers.count("user-agent") ? req.headers.at("user-agent") : "unknown";
+        cerr << "[MCP] Request: " << method << " (id: " << request["id"].dump() << ") from " << userAgent << endl;
 
         // Cek apakah ada SSE session aktif untuk client ini
         string sessionId = "";
@@ -181,8 +185,22 @@ namespace MCP {
             return res;
         }
 
-        // Buat SSE stream
-        string newSessionId = generateSessionId();
+        // Check if we already have a session ID from a previous POST initialize
+        string sessionId = "";
+        auto sessionHeaderIt = req.headers.find("mcp-session-id");
+        if (sessionHeaderIt == req.headers.end()) sessionHeaderIt = req.headers.find("Mcp-Session-Id");
+        if (sessionHeaderIt != req.headers.end()) sessionId = sessionHeaderIt->second;
+
+        if (sessionId.empty()) {
+            size_t queryPos = req.path.find("sessionId=");
+            if (queryPos != string::npos) {
+                size_t endPos = req.path.find('&', queryPos);
+                if (endPos == string::npos) endPos = req.path.size();
+                sessionId = req.path.substr(queryPos + 10, endPos - (queryPos + 10));
+            }
+        }
+
+        string newSessionId = sessionId.empty() ? generateSessionId() : sessionId;
         {
             lock_guard<mutex> lock(sessionMutex_);
             activeSessions_[newSessionId] = client_fd;
@@ -425,6 +443,33 @@ namespace MCP {
             res.body = "{\"error\":\"invalid_client\", \"message\":\"Invalid Client ID or Secret\"}";
             cerr << "[OAuth] Token request failed for Client ID: " << clientId << endl;
         }
+        return res;
+    }
+
+    HttpResponse McpHandler::handleDiscovery(const HttpRequest& req, socket_t client_fd) {
+        HttpResponse res;
+        res.statusCode = 200;
+        res.statusText = "OK";
+        res.headers["Content-Type"] = "application/json";
+
+        // Determine base URL from Host header if possible, else use a placeholder or the one we know
+        string host = "claudemcp.ilmeee.com";
+        auto it = req.headers.find("host");
+        if (it != req.headers.end()) host = it->second;
+
+        string baseUrl = "https://" + host;
+
+        json body = {
+            {"resource", baseUrl + "/mcp"},
+            {"authorization_servers", {baseUrl}}
+        };
+        
+        // We also provide the specific endpoints for clients that look for them here
+        body["authorization_endpoint"] = baseUrl + "/authorize";
+        body["token_endpoint"] = baseUrl + "/token";
+
+        res.body = body.dump();
+        cerr << "[Discovery] Metadata served for: " << host << endl;
         return res;
     }
 

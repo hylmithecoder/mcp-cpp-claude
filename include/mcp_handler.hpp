@@ -4,6 +4,7 @@
 #include <map>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include "cache_manager.hpp"
 #include "server.hpp"
 #include "system_tools.hpp"
 #include "handledb.hpp"
@@ -12,7 +13,7 @@ namespace MCP {
 
     class McpHandler {
     public:
-        McpHandler() : db_("mcp_history.db"), tools_(&db_) {}
+        McpHandler() : db_((Tools::CacheManager::ensure(), Tools::CacheManager::history_db()).c_str()), tools_(&db_) {}
 
         void registerRoutes(Server& server);
         void setCredentials(const std::string& id, const std::string& secret) {
@@ -37,6 +38,7 @@ namespace MCP {
         HttpResponse handleDelete(const HttpRequest& req, socket_t client_fd);
         HttpResponse handleAuthorize(const HttpRequest& req, socket_t client_fd);
         HttpResponse handleToken(const HttpRequest& req, socket_t client_fd);
+        HttpResponse handleDiscovery(const HttpRequest& req, socket_t client_fd);
 
         nlohmann::json processJsonRpc(const nlohmann::json& request);
 
