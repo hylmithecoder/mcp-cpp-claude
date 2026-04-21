@@ -4,21 +4,20 @@
 #include <vector>
 #include "../include/handledb.hpp"
 
-using namespace std;
 using json = nlohmann::json;
 
 namespace Tools {
 void DataBase::initDb(const char* dbPath){
     rc = sqlite3_open(dbPath, &db);
     if(rc != SQLITE_OK){
-        cerr << "Error: " << sqlite3_errmsg(db) << endl;
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_close(db);
         db = nullptr;
     }
 
     rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS history_title (id INTEGER PRIMARY KEY AUTOINCREMENT, mainContext TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)", nullptr, nullptr, nullptr);
     if(rc != SQLITE_OK){
-        cerr << "Error: " << sqlite3_errmsg(db) << endl;
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_close(db);
         db = nullptr;
     }
@@ -26,7 +25,7 @@ void DataBase::initDb(const char* dbPath){
     rc = sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS history_context (id INTEGER PRIMARY KEY AUTOINCREMENT, id_title INTEGER ,context TEXT NOT NULL, response TEXT NOT NULL, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP)", nullptr, nullptr, nullptr);
 
     if(rc != SQLITE_OK){
-        cerr << "Error: " << sqlite3_errmsg(db) << endl;
+        std::cerr << "Error: " << sqlite3_errmsg(db) << std::endl;
         sqlite3_close(db);
         db = nullptr;
     }
@@ -58,11 +57,11 @@ int DataBase::insertData(FormatInput data, sqlite3* db) {
     return (rc == SQLITE_DONE) ? SQLITE_OK : 0;
 }
 
-string DataBase::readTheContext(sqlite3* db, int idTitle) {
+std::string DataBase::readTheContext(sqlite3* db, int idTitle) {
     sqlite3_stmt* stmt;
     json firstResponse, secondResponse = json::array();
     
-    string sql = "SELECT mainContext, timestamp FROM history_title WHERE id = ?";
+    std::string sql = "SELECT mainContext, timestamp FROM history_title WHERE id = ?";
     rc = sqlite3_prepare_v2(db, sql.c_str(), -1, &stmt, nullptr);
     if (rc == SQLITE_OK) {
         sqlite3_bind_int(stmt, 1, idTitle);

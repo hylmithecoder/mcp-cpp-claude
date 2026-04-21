@@ -1,8 +1,10 @@
 #pragma once
 
 #include <string>
-#include <filesystem>
 #include <chrono>
+
+#include "fs_alias.hpp"
+
 #include "cache_path.hpp"
 
 namespace Tools {
@@ -18,16 +20,16 @@ class CacheManager {
         }
 
         static void ensure() {
-            std::filesystem::create_directories(base());
+            fs::create_directories(base());
         }
 
         static void cleanup_old(std::chrono::hours max_age = std::chrono::hours(24)) {
-            auto now = std::filesystem::file_time_type::clock::now();
+            auto now = fs::file_time_type::clock::now();
 
-            for (const auto& entry : std::filesystem::directory_iterator(base())) {
-                auto ftime = std::filesystem::last_write_time(entry);
+            for (const auto& entry : fs::directory_iterator(base())) {
+                auto ftime = fs::last_write_time(entry);
                 if (now - ftime > max_age) {
-                    std::filesystem::remove_all(entry);
+                    fs::remove_all(entry);
                 }
             }
         }

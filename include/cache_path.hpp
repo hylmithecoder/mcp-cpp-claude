@@ -2,7 +2,8 @@
 
 #include <string>
 #include <cstdlib>
-#include <filesystem>
+
+#include "fs_alias.hpp"
 
 namespace Tools {
 
@@ -31,7 +32,7 @@ inline std::string get_cache_path() {
     }
 
     inline void ensure_cache_dir() {
-        std::filesystem::create_directories(get_cache_path());
+        fs::create_directories(get_cache_path());
     }
 
 }

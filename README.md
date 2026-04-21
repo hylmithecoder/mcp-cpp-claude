@@ -2,12 +2,13 @@
 
 # 🖥️ Native C++ MCP Server
 
-**Give Claude direct access to your Linux machine — no Python, no Node.js, no runtime overhead.**
+**Give Claude, ChatGPT, and other AI with MCP support direct access to your Linux, Windows, macOS, or Android — no Python, no Node.js, no runtime overhead.**
 
 [![Language](https://img.shields.io/badge/language-C%2B%2B20-blue?logo=cplusplus)](https://isocpp.org/)
 ![Linux](https://img.shields.io/badge/platform-Linux-orange?logo=linux&logoColor=white)
 ![macOS](https://img.shields.io/badge/platform-macOS-green?logo=apple&logoColor=white)
 ![Windows](https://img.shields.io/badge/platform-windows-blue?logo=windows&logoColor=white)
+![Android](https://img.shields.io/badge/platform-android-green?logo=android&logoColor=white)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Protocol](https://img.shields.io/badge/MCP-Streamable%20HTTP-purple)](https://modelcontextprotocol.io)
 [![Transport](https://img.shields.io/badge/transport-JSON--RPC%202.0-yellow)](https://www.jsonrpc.org/)
@@ -20,7 +21,7 @@
 
 ## ✨ What is this?
 
-A **Model Context Protocol (MCP) server** written in native C++ that lets AI assistants like **Claude** interact directly with your local system (**Linux, macOS, or Windows**). No Python interpreter, no Node.js runtime — just a lean compiled binary that wakes up in milliseconds.
+A **Model Context Protocol (MCP) server** written in native C++ that lets AI assistants like **Claude, ChatGPT, and other AI with MCP support** interact directly with your local system (**Linux, macOS, or Windows**). No Python interpreter, no Node.js runtime — just a lean compiled binary that wakes up in milliseconds.
 
 Connect it to Claude.ai via a tunnel (SSH, ngrok, Cloudflare) and Claude can:
 - 📁 Browse your filesystem
