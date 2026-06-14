@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*" 
+           Name="MCP C++ Server" 
+           Language="1033" 
+           Version="2026.0.2" 
+           Manufacturer="Hylmi" 
+           UpgradeCode="4f3f0e0c-99c5-47e1-8848-bb8d56bdfa67">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+    
+    <MediaTemplate EmbedCab="yes" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <!-- Install in Program Files (64-bit) -->
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="MCP Server">
+          
+          <!-- Main executable -->
+          <Component Id="McpExe" Guid="8d6dbfbf-b490-482a-a957-3a1ab9bc077b">
+            <File Id="mcp.exe" Source="build_win/mcp.exe" KeyPath="yes" />
+          </Component>
+          
+          <!-- GUI Configurator companion with Desktop & Start Menu Shortcuts -->
+          <Component Id="McpGuiExe" Guid="9f7dbfbf-b490-482a-a957-3a1ab9bc077c">
+            <File Id="mcp_gui.exe" Source="build_win/mcp-gui.exe" KeyPath="yes">
+              <Shortcut Id="DesktopShortcut" 
+                        Directory="DesktopFolder" 
+                        Name="MCP Server Configurator" 
+                        WorkingDirectory="INSTALLFOLDER" 
+                        Icon="mcp_icon.exe"
+                        Advertise="yes" />
+              <Shortcut Id="StartMenuShortcut" 
+                        Directory="ProgramMenuFolder" 
+                        Name="MCP Server Configurator" 
+                        WorkingDirectory="INSTALLFOLDER" 
+                        Icon="mcp_icon.exe"
+                        Advertise="yes" />
+            </File>
+          </Component>
+
+          <!-- System and C/C++ Compiler DLL Dependencies -->
+          <Component Id="LibIconvDll" Guid="0b6dbfbf-b490-482a-a957-3a1ab9bc077d">
+            <File Id="libiconv_2.dll" Source="build_win/libiconv-2.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="LibMcfgthreadDll" Guid="1b6dbfbf-b490-482a-a957-3a1ab9bc077e">
+            <File Id="libmcfgthread_2.dll" Source="build_win/libmcfgthread-2.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="LibSslDll" Guid="2b6dbfbf-b490-482a-a957-3a1ab9bc077f">
+            <File Id="libssl_3_x64.dll" Source="build_win/libssl-3-x64.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="LibCryptoDll" Guid="3b6dbfbf-b490-482a-a957-3a1ab9bc0780">
+            <File Id="libcrypto_3_x64.dll" Source="build_win/libcrypto-3-x64.dll" KeyPath="yes" />
+          </Component>
+
+          <!-- MinGW / Compiler DLL Dependencies -->
+          <Component Id="LibStdCppDll" Guid="5b6dbfbf-b490-482a-a957-3a1ab9bc0782">
+            <File Id="libstdc___6.dll" Source="build_win/libstdc++-6.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="LibWinpthreadDll" Guid="6b6dbfbf-b490-482a-a957-3a1ab9bc0783">
+            <File Id="libwinpthread_1.dll" Source="build_win/libwinpthread-1.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="LibGccDll" Guid="7b6dbfbf-b490-482a-a957-3a1ab9bc0784">
+            <File Id="libgcc_s_seh_1.dll" Source="build_win/libgcc_s_seh-1.dll" KeyPath="yes" />
+          </Component>
+
+          <!-- Qt6 DLL Dependencies -->
+          <Component Id="Qt6CoreDll" Guid="ac6dbfbf-b490-482a-a957-3a1ab9bc0786">
+            <File Id="Qt6Core.dll" Source="build_win/Qt6Core.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="Qt6GuiDll" Guid="bc6dbfbf-b490-482a-a957-3a1ab9bc0787">
+            <File Id="Qt6Gui.dll" Source="build_win/Qt6Gui.dll" KeyPath="yes" />
+          </Component>
+          <Component Id="Qt6WidgetsDll" Guid="cc6dbfbf-b490-482a-a957-3a1ab9bc0788">
+            <File Id="Qt6Widgets.dll" Source="build_win/Qt6Widgets.dll" KeyPath="yes" />
+          </Component>
+
+          <!-- Platforms Plugin Subdirectory -->
+          <Directory Id="PlatformsDir" Name="platforms">
+            <Component Id="QWindowsDll" Guid="dc6dbfbf-b490-482a-a957-3a1ab9bc0789">
+              <File Id="qwindows.dll" Source="build_win/platforms/qwindows.dll" KeyPath="yes" />
+            </Component>
+          </Directory>
+
+        </Directory>
+      </Directory>
+      
+      <!-- Shortcut Folders -->
+      <Directory Id="ProgramMenuFolder" />
+      <Directory Id="DesktopFolder" Name="Desktop" />
+    </Directory>
+
+    <!-- App Icon for Control Panel & Shortcuts -->
+    <Icon Id="mcp_icon.exe" SourceFile="build_win/mcp-gui.exe" />
+    <Property Id="ARPPRODUCTICON" Value="mcp_icon.exe" />
+
+    <!-- Features -->
+    <Feature Id="ProductFeature" Title="MCP Server" Level="1">
+      <ComponentRef Id="McpExe" />
+      <ComponentRef Id="McpGuiExe" />
+      <ComponentRef Id="LibIconvDll" />
+      <ComponentRef Id="LibMcfgthreadDll" />
+      <ComponentRef Id="LibSslDll" />
+      <ComponentRef Id="LibCryptoDll" />
+      <ComponentRef Id="LibStdCppDll" />
+      <ComponentRef Id="LibWinpthreadDll" />
+      <ComponentRef Id="LibGccDll" />
+      <ComponentRef Id="Qt6CoreDll" />
+      <ComponentRef Id="Qt6GuiDll" />
+      <ComponentRef Id="Qt6WidgetsDll" />
+      <ComponentRef Id="QWindowsDll" />
+    </Feature>
+  </Product>
+</Wix>

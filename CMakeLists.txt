@@ -65,16 +65,59 @@ FetchContent_MakeAvailable(libftp)
 # Find libxml2
 find_package(LibXml2 REQUIRED)
 
-add_executable(mcp ${SOURCE_SRC})
-target_link_libraries(mcp PRIVATE nlohmann_json::nlohmann_json ${SQLITE3_LIBS} LibXml2::LibXml2 ftp)
+add_executable(${PROJECT_NAME} ${SOURCE_SRC})
+target_link_libraries(${PROJECT_NAME} PRIVATE nlohmann_json::nlohmann_json ${SQLITE3_LIBS} LibXml2::LibXml2 ftp)
 if(SQLITE3_INCS)
-    target_include_directories(mcp PRIVATE ${SQLITE3_INCS})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${SQLITE3_INCS})
 endif()
 if(WIN32)
     target_link_libraries(mcp PRIVATE ws2_32 bcrypt)
     target_compile_definitions(mcp PRIVATE _HAS_STD_BYTE=0)
+
+    # ---------------------------------------------------------------------------
+    # Qt6 Path configuration (Windows / MinGW Cross-compilation)
+    # ---------------------------------------------------------------------------
+    # Workaround for Qt 6.11.0 host tools vs 6.10.2 target version mismatch
+    if(NOT COMMAND _qt_internal_should_include_targets)
+        macro(_qt_internal_should_include_targets)
+            if(ARGC EQUAL 1)
+                set(${ARGV0} TRUE)
+            elseif(ARGC EQUAL 2)
+                set(${ARGV1} TRUE)
+            endif()
+        endmacro()
+    endif()
+
+    # Detect the downloaded Qt6 Windows binaries in vendor/qt6
+    file(GLOB QT6_CANDIDATES "${CMAKE_CURRENT_SOURCE_DIR}/vendor/qt6/[0-9]*/mingw_64")
+    list(LENGTH QT6_CANDIDATES CANDIDATE_COUNT)
+    if(CANDIDATE_COUNT GREATER 0)
+        list(GET QT6_CANDIDATES 0 DETECTED_QT6_DIR)
+        message(STATUS "Found Qt6 Windows MinGW installation: ${DETECTED_QT6_DIR}")
+        set(CMAKE_PREFIX_PATH "${DETECTED_QT6_DIR}")
+    else()
+        message(WARNING "Qt6 MinGW binaries not found in vendor/qt6. Using default prefix path.")
+        set(CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/vendor/qt6/6.10.2/mingw_64")
+    endif()
+
+    # Enable Qt6 and locate components
+    find_package(Qt6 REQUIRED COMPONENTS Widgets)
+
+    # Build Qt6 GUI companion app
+    add_executable(mcp-gui WIN32 
+        src/config_gui.cpp 
+        src/windowing/mainwindow.cpp 
+        include/windowing/mainwindow.hpp
+        src/resources.rc
+    )
+    set_target_properties(mcp-gui PROPERTIES
+        AUTOMOC ON
+        AUTOUIC ON
+        AUTORCC ON
+    )
+    target_link_libraries(mcp-gui PRIVATE Qt6::Widgets ws2_32 bcrypt)
 elseif(ANDROID)
-    target_link_libraries(mcp PRIVATE log ghc_filesystem)
+    target_link_libraries(${PROJECT_NAME} PRIVATE log ghc_filesystem)
 else()
-    target_link_libraries(mcp PRIVATE pthread)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
 endif()

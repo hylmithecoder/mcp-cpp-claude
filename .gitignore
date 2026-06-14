@@ -10,3 +10,6 @@ release_android.sh
 .DS_Store
 mcp_history.db
 .claude/
+vendor/
+.venv/
+aqtinstall.log
