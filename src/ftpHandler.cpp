@@ -77,9 +77,20 @@ static bool base64Decode(const string &in, string &out) {
 }
 
 // Get the local FTP mirror base path: $HOME/.mcp/ftp/
+// On Windows HOME is usually unset; fall back to USERPROFILE (then HOMEPATH)
+// so the mirror lands in the user's writable profile dir instead of the
+// process working dir (which is read-only when installed via MSI).
 static string getFtpMirrorBase() {
+#ifdef _WIN32
+  const char *home = getenv("USERPROFILE");
+  if (!home || !*home)
+    home = getenv("HOMEPATH");
+  if (!home || !*home)
+    home = getenv("HOME");
+#else
   const char *home = getenv("HOME");
-  string base = home ? string(home) : ".";
+#endif
+  string base = (home && *home) ? string(home) : ".";
   base += "/.mcp/ftp";
   return base;
 }
