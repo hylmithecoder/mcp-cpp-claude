@@ -23,11 +23,14 @@
 
             nativeBuildInputs = with pkgs; [
               cmake
+              pkg-config
             ];
 
             buildInputs = with pkgs; [
               nlohmann_json
               sqlite
+              libxml2
+              boost
             ];
           };
 
@@ -76,6 +79,7 @@
             nativeBuildInputs = with pkgs; [
               cmake
               ninja       # for faster builds
+              pkg-config
               clang-tools # for clangd/formatting
               gdb         # for debugging
             ];
@@ -83,6 +87,8 @@
             buildInputs = with pkgs; [
               nlohmann_json
               sqlite
+              libxml2
+              boost
             ];
           };
         }

@@ -55,13 +55,23 @@ else()
     set(SQLITE3_INCS "${sqlite3_SOURCE_DIR}")
 endif()
 
+FetchContent_Declare(
+        libftp
+        GIT_REPOSITORY https://github.com/deniskovalchuk/libftp.git
+        GIT_TAG        v1.5.0
+        PATCH_COMMAND  sed -i "s/Boost 1.88.0/Boost/g" CMakeLists.txt)
+FetchContent_MakeAvailable(libftp)
+
+# Find libxml2
+find_package(LibXml2 REQUIRED)
+
 add_executable(mcp ${SOURCE_SRC})
-target_link_libraries(mcp PRIVATE nlohmann_json::nlohmann_json ${SQLITE3_LIBS})
+target_link_libraries(mcp PRIVATE nlohmann_json::nlohmann_json ${SQLITE3_LIBS} LibXml2::LibXml2 ftp)
 if(SQLITE3_INCS)
     target_include_directories(mcp PRIVATE ${SQLITE3_INCS})
 endif()
 if(WIN32)
-    target_link_libraries(mcp PRIVATE ws2_32)
+    target_link_libraries(mcp PRIVATE ws2_32 bcrypt)
     target_compile_definitions(mcp PRIVATE _HAS_STD_BYTE=0)
 elseif(ANDROID)
     target_link_libraries(mcp PRIVATE log ghc_filesystem)

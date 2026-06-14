@@ -9,3 +9,4 @@ release_android.sh
 .env
 .DS_Store
 mcp_history.db
+.claude/

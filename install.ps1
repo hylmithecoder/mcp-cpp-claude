@@ -3,7 +3,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$VERSION = "release-0.3-stable"
+$VERSION = "release-1.0-stable"
 $REPO = "hylmithecoder/mcp-cpp-claude"
 $BASE_URL = "https://github.com/$REPO/releases/download/$VERSION"
 

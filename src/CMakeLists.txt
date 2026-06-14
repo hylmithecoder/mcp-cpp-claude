@@ -13,5 +13,7 @@ set(SOURCE_SRC
     ${CMAKE_CURRENT_LIST_DIR}/utils.cpp
     ${CMAKE_CURRENT_LIST_DIR}/../include/cache_manager.hpp
     ${CMAKE_CURRENT_LIST_DIR}/../include/cache_path.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/officeWizard.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/ftpHandler.cpp
     PARENT_SCOPE
 )

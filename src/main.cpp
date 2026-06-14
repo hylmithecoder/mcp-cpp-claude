@@ -2,6 +2,7 @@
 #include "../include/utils.hpp"
 #include "server.hpp"
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <random>
 #include <signal.h>
@@ -37,7 +38,8 @@ void signalHandler(int signum) {
   exit(0);
 }
 
-void handleArguments(int argc, char *argv[], MCP::Utils utilClass = MCP::Utils()) {
+void handleArguments(int argc, char *argv[],
+                     MCP::Utils utilClass = MCP::Utils()) {
   for (int i = 1; i < argc; ++i) {
     string arg = argv[i];
     if (arg == "-v" || arg == "--version") {
@@ -75,7 +77,71 @@ void handleArguments(int argc, char *argv[], MCP::Utils utilClass = MCP::Utils()
   }
 }
 
+void loadEnv() {
+  std::ifstream file(".env");
+  if (!file.is_open()) {
+    file.open("../.env");
+  }
+  if (!file.is_open()) {
+    std::string homePath;
+#ifdef _WIN32
+    const char *home = getenv("USERPROFILE");
+    if (!home) {
+      home = getenv("HOME");
+    }
+#else
+    const char *home = getenv("HOME");
+#endif
+    if (home) {
+      homePath = std::string(home) + "/.env";
+      file.open(homePath);
+    }
+  }
+  if (!file.is_open()) {
+    return;
+  }
+  std::string line;
+  while (std::getline(file, line)) {
+    // Remove trailing whitespace and newlines
+    while (!line.empty() &&
+           (line.back() == '\r' || line.back() == '\n' || line.back() == ' ')) {
+      line.pop_back();
+    }
+    if (line.empty() || line[0] == '#') {
+      continue;
+    }
+    size_t eq = line.find('=');
+    if (eq != std::string::npos) {
+      std::string key = line.substr(0, eq);
+      std::string val = line.substr(eq + 1);
+
+      // Trim spaces from key and val
+      size_t key_start = key.find_first_not_of(" ");
+      size_t key_end = key.find_last_not_of(" ");
+      if (key_start != std::string::npos && key_end != std::string::npos) {
+        key = key.substr(key_start, key_end - key_start + 1);
+      }
+      size_t val_start = val.find_first_not_of(" ");
+      size_t val_end = val.find_last_not_of(" ");
+      if (val_start != std::string::npos && val_end != std::string::npos) {
+        val = val.substr(val_start, val_end - val_start + 1);
+      }
+
+      // Remove surrounding quotes if present
+      if (val.size() >= 2 && ((val.front() == '"' && val.back() == '"') ||
+                              (val.front() == '\'' && val.back() == '\''))) {
+        val = val.substr(1, val.size() - 2);
+      }
+
+      setenv(key.c_str(), val.c_str(), 1);
+    }
+  }
+}
+
 int main(int argc, char *argv[]) {
+  // Load .env configuration
+  loadEnv();
+
   // Handle Ctrl+C gracefully
   signal(SIGINT, signalHandler);
   signal(SIGTERM, signalHandler);
