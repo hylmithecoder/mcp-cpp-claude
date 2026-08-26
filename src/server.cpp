@@ -1,4 +1,5 @@
 #include "../include/server.hpp"
+#include <cerrno>
 #include <cstring>
 #include <functional>
 #include <iostream>
@@ -51,7 +52,7 @@ void Server::route(const string &method, const string &path,
 }
 
 void Server::start() {
-  struct sockaddr_in address;
+  struct sockaddr_in address{};
   int opt = 1;
 
   // Create socket
@@ -78,13 +79,8 @@ void Server::start() {
     perror("setsockopt (SO_REUSEADDR) failed");
     exit(EXIT_FAILURE);
   }
-#ifdef SO_REUSEPORT
-  if (setsockopt(server_fd_, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) ==
-      -1) {
-    // Some systems might not support SO_REUSEPORT, we can ignore or log it
-    // perror("setsockopt (SO_REUSEPORT) failed");
-  }
-#endif
+  // NOTE: SO_REUSEPORT is intentionally NOT set: it would let a second
+  // instance bind the same port and silently steal half the connections.
 #endif
 
   address.sin_family = AF_INET;
@@ -96,7 +92,7 @@ void Server::start() {
 #ifdef _WIN32
     cerr << "bind failed: " << WSAGetLastError() << endl;
 #else
-    perror("bind failed");
+    cerr << "bind failed on port " << port_ << ": " << strerror(errno) << endl;
 #endif
     exit(EXIT_FAILURE);
   }

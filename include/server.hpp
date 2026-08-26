@@ -44,7 +44,7 @@ typedef int socket_t;
 
 namespace MCP {
 
-const int PORT = 5500;
+inline int PORT = 5500;
 const int BUFFER_SIZE = 8192;
 
 struct HttpRequest {

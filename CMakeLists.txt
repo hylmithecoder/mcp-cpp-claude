@@ -6,6 +6,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(mcp VERSION 2026.0.2)
 
+option(BUILD_STATIC "Link a fully static executable" OFF)
+if(BUILD_STATIC)
+    # Must be set BEFORE any find_package() so CMake picks .a over .so
+    set(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    set(BUILD_SHARED_LIBS OFF)
+    set(OPENSSL_USE_STATIC_LIBS ON)
+    set(Boost_USE_STATIC_LIBS ON)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+endif()
+
 # Prevent leakage of host headers (/usr/include) during cross-compilation
 set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
 set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
@@ -120,4 +130,15 @@ elseif(ANDROID)
     target_link_libraries(${PROJECT_NAME} PRIVATE log ghc_filesystem)
 else()
     target_link_libraries(${PROJECT_NAME} PRIVATE pthread)
+endif()
+
+if(BUILD_STATIC AND NOT WIN32)
+    target_link_options(${PROJECT_NAME} PRIVATE -static -static-libgcc -static-libstdc++)
+    # libxml2.a pulls these in; they are transitive only for the shared build
+    find_package(ZLIB REQUIRED)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ZLIB::ZLIB)
+    find_library(LZMA_STATIC NAMES lzma)
+    if(LZMA_STATIC)
+        target_link_libraries(${PROJECT_NAME} PRIVATE ${LZMA_STATIC})
+    endif()
 endif()

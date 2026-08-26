@@ -52,7 +52,15 @@ void handleArguments(int argc, char *argv[],
     }
     if (arg == "-p" || arg == "--port") {
       if (i + 1 < argc) {
-        // MCP::PORT = stoi(argv[++i]);
+        try {
+          int p = stoi(argv[++i]);
+          if (p < 1 || p > 65535)
+            throw std::out_of_range("port range");
+          MCP::PORT = p;
+        } catch (const std::exception &) {
+          cerr << "Error: Invalid port number: " << argv[i] << endl;
+          exit(1);
+        }
       } else {
         cerr << "Error: Missing port number" << endl;
         exit(1);
